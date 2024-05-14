@@ -9,6 +9,42 @@ head(input$obsdf) # long format with all observations
 # obs      # transformed appropriately for nll_type (becomes keep vec)
 # obserror # if nll_type obs error is an input (note this is Neff for dmultinom)
 
+#Remove length comps for now till we implement them
+input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
+
+#Add a likelihood calculation index to the obs data frame
+input$obsdf <- cbind(input$obsdf,input$obsdf$obs_type)
+colnames(input$obsdf)[10] <- "likelihood_index"
+like_index <- 1
+#Loop over all observations to identify multinomial 
+#observations with linked likelihoods
+for(i in seq_along(input$obsdf$obs_type)){
+  if(i==1){
+    #Set the first observation at index 1
+    input$obsdf$likelihood_index[i] <- like_index 
+  }else if(input$obsdf$obs_type[i]!=input$obsdf$obs_type[i-1]){
+    #If observation type changes then increment
+    like_index <- like_index + 1
+    input$obsdf$likelihood_index[i] <- like_index 
+  }else if(input$obsdf$obs_type[i]<2){
+    #All catches and indices are independent values so always increment
+    like_index <- like_index + 1
+    input$obsdf$likelihood_index[i] <- like_index 
+  }else if(input$obsdf$year[i]!=input$obsdf$year[i-1]){
+    #Increment if the year of composition changes
+    like_index <- like_index + 1
+    input$obsdf$likelihood_index[i] <- like_index 
+  }else if(input$obsdf$fleet[i]!=input$obsdf$fleet[i-1]){
+    #Increment if the fleet of composition changes
+    like_index <- like_index + 1
+    input$obsdf$likelihood_index[i] <- like_index 
+  }else{
+    #If year and fleet don't change then comps will be combined for a 
+    #single multinomial likelihood calculation
+    input$obsdf$likelihood_index[i] <- like_index 
+  }
+}
+
 dat <- list()
 dat$obs <- input$obsdf$obs
 dat$aux <- input$obsdf
@@ -24,6 +60,8 @@ dat$mature <- input$maturity
 dat$fleetTypes <- unique(input$obsdf$fleet) 
 dat$srmode <- 1
 
+
+
 par <- list()
 par$logsigR <- log(input$sigr)
 par$logQ <- log(input$q)
@@ -38,8 +76,8 @@ par$logfshslx <- log(input$fsh_slx)
 par$logsrvslx <- log(input$fsh_slx)
 
 # todo
-calc_ssb <- function(Naa, Faa, M, waa, mature){
-  rowSums(Naa*exp(-Faa-M)*mature*waa)
+calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
+  rowSums(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)
 }
 
 f<-function(par){ # note dat isn't an argument in the fxn
@@ -47,27 +85,40 @@ f<-function(par){ # note dat isn't an argument in the fxn
   obs <- OBS(obs) # access simulation, OSA residuals
   # logobs[is.na(logobs)] <- missing # i think this messes up the OBS...
   nobs <- length(obs)    
-  nrow <- nrow(M)
-  ncol <- ncol(M)
+  nrow <- nrow(logM)
+  ncol <- ncol(logM)
   sigR <- exp(logsigR)
-  ssb <- calc_ssb(exp(logN),Faa,natmat,waa,mature)
   
   Faa = Fmort * slx_fsh
-  Z = M + Fmort
-  S = exp(-Z)
-  Naa[y,a] = exp(mean_log_rec + rec_dev[y])
-  Naa[y+1,2] = Naa[y,a-1]*S[y, a-1]
-  Naa[y+1,nage] = Naa[y,nage]*S[y,nage]
-  # pred catch, sum over ages
-  logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(Faa[y,a])
   
-  # survey biomass index, sum over ages
-  pred = logQ + logsrvslx + log(exp(logN) * waa) - Z * sampleTimes
-  jnll <- jnll - dnorm(obs, pred, obserror, 1)
-  # age comp
-  tmp = exp(logsrvslx + logN - Z * sampleTimes)
-  pred = tmp / sum(tmp) # this is where ageing error would be applied
-  jnll <- jnll - dmultinom(obserror*obs, pred, 1)
+  #ssb <- calc_ssb(exp(logN),Faa,natmat,waa,mature)
+  
+  # Z = M + Fmort
+  # S = exp(-Z)
+  # Naa[y,a] = exp(mean_log_rec + rec_dev[y])
+  # Naa[y+1,2] = Naa[y,a-1]*S[y, a-1]
+  # Naa[y+1,nage] = Naa[y,nage]*S[y,nage]
+  # pred catch, sum over ages
+  # logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(Faa[y,a])
+  # 
+  # # survey biomass index, sum over ages
+  # pred = logQ + logsrvslx + log(exp(logN) * waa) - Z * sampleTimes
+  # jnll <- jnll - dnorm(obs, pred, obserror, 1)
+  # # age comp
+  # tmp = exp(logsrvslx + logN - Z * sampleTimes)
+  # pred = tmp / sum(tmp) # this is where ageing error would be applied
+  # jnll <- jnll - dmultinom(obserror*obs, pred, 1)
+  
+  #section to calculate population abundance
+  
+  
+  #section to calculate predicted values
+  dat_aux_pred 
+  
+  #section to calculate likelihoods
+  for(i in unique(dat$aux$likelihood_index)){
+    
+  }
   
   jnll <- 0
   
