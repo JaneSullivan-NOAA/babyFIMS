@@ -55,15 +55,19 @@ f<-function(par){ # note dat isn't an argument in the fxn
   Faa = Fmort * slx_fsh
   Z = M + Fmort
   S = exp(-Z)
-  Naa(y,a) = exp(mean_log_rec + rec_dev(y))
-  Naa(y+1,2) = Naa(y,a-1)*S(y, a-1)
-  Naa(y+1,nage) = Naa(y,nage)*S(y,nage)
-  logQaa = log(exp(logQ)*srv_slx)
-  logPredIndex = logQaa * logN - Z * sampleTimes
-  logPred[i] <- logQ[keyQ[f,a]]+logN[y,a]-Z*sampleTimes[f]
+  Naa[y,a] = exp(mean_log_rec + rec_dev[y])
+  Naa[y+1,2] = Naa[y,a-1]*S[y, a-1]
+  Naa[y+1,nage] = Naa[y,nage]*S[y,nage]
+  # pred catch, sum over ages
+  logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(Faa[y,a])
   
-  # multinomial
-  jnll <- jnll - dmultinom(obserror * obs, pred, 1)
+  # survey biomass index, sum over ages
+  pred = logQ + logsrvslx + log(exp(logN) * waa) - Z * sampleTimes
+  jnll <- jnll - dnorm(obs, pred, obserror, 1)
+  # age comp
+  tmp = exp(logsrvslx + logN - Z * sampleTimes)
+  pred = tmp / sum(tmp) # this is where ageing error would be applied
+  jnll <- jnll - dmultinom(obserror*obs, pred, 1)
   
   jnll <- 0
   
