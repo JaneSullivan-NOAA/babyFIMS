@@ -12,62 +12,58 @@ head(input$obsdf) # long format with all observations
 dat <- list()
 dat$obs <- input$obsdf$obs
 dat$aux <- input$obsdf
-dat$years <- input$years
-dat$minAge <- min(fit$data$minAgePerFleet)
-dat$fleetTypes <- fit$data$fleetTypes
-dat$sampleTimes <- fit$data$sampleTimes
-dat$year <- fit$data$years
-dat$age <-  min(fit$data$minAgePerFleet):max(fit$data$maxAgePerFleet)   
-dat$M <- fit$data$natMor
-dat$SW <- fit$data$stockMeanWeight
-dat$MO <- fit$data$propMat
-dat$PF <- fit$data$propF
-dat$PM <- fit$data$propM
-
-dat$srmode <- 2
-dat$fcormode <- 2
-dat$keyF <- fit$conf$keyLogFsta[1,]+1
-dat$keyQ <- fit$conf$keyLogFpar+1
-dat$keySd <- fit$conf$keyVarObs+1; dat$keySd[dat$keySd<=0] <- NA
-dat$fleetDim <- apply(dat$keySd,1,function(x)sum(!is.na(x)))
-dat$covType <-  as.integer(fit$conf$obsCorStruct)-1 # c(0,1,2)
-dat$keyIGAR <- fit$conf$keyCorObs +1 ; dat$keyIGAR[fit$conf$keyCorObs==0] <- NA
-dat$keyIGAR[is.na(fit$conf$keyCorObs)] <- -1
-#dat$keyIGAR[2, 1:4] <- 1
+dat$year <- input$years
+dat$minYear <- min(dat$year)
+dat$age <-  input$ages
+dat$minAge <- min(dat$age)
+dat$sampleTimes <- input$srv_frac
+dat$spawnTimes <- input$sp_frac
+dat$waa <- input$waa
+dat$mature <- input$maturity
+# maybe obsType instead? not sure how this will all be indexed yet
+dat$fleetTypes <- unique(input$obsdf$fleet) 
+dat$srmode <- 1
 
 par <- list()
-par$logsdR <- 0
-par$logsdS <- 0
-par$logsdF <- numeric(max(dat$keyF))
+par$logsigR <- log(input$sigr)
+par$logQ <- log(input$q)
+# is M a constant in FIMS or by year/age?
+par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
-par$transRhoF <- if(dat$fcormode==0){numeric(0)}else{0.1}
 par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
-par$logQ <- numeric(max(dat$keyQ, na.rm=TRUE))-5
-par$logsdO <- numeric(max(dat$keySd, na.rm=TRUE))
-par$logIGARdist <- if(sum(dat$covType==1)==0){numeric(0)}else{numeric(max(dat$keyIGAR,na.rm=TRUE))}
-par$parUS <- unlist(sapply(1:length(dat$covType), function(f)if(dat$covType[f]==2)unstructured(dat$fleetDim[f])$parms()))
-par$missing <- numeric(sum(is.na(dat$logobs)))
 par$logN <- matrix(0, nrow=length(dat$year), ncol=length(dat$age))
-par$logF <- matrix(0, nrow=length(dat$year), ncol=max(dat$keyF))
+par$logF <- matrix(0, nrow=length(dat$year), ncol=1)
+# need to make this parametric
+par$logfshslx <- log(input$fsh_slx)
+par$logsrvslx <- log(input$fsh_slx)
 
-ssbFUN <- function(N, F, M, SW, MO, PF, PM){
-  rowSums(N*exp(-PF*F-PM*M)*MO*SW)
+# todo
+calc_ssb <- function(Naa, Faa, M, waa, mature){
+  rowSums(Naa*exp(-Faa-M)*mature*waa)
 }
 
-f<-function(par){
-  getAll(par,dat)
-  logobs <- OBS(logobs)
-  logobs[is.na(logobs)] <- missing
-  nobs <- length(logobs)    
+f<-function(par){ # note dat isn't an argument in the fxn
+  getAll(par, dat) # RTMB's attach
+  obs <- OBS(obs) # access simulation, OSA residuals
+  # logobs[is.na(logobs)] <- missing # i think this messes up the OBS...
+  nobs <- length(obs)    
   nrow <- nrow(M)
   ncol <- ncol(M)
-  sdR <- exp(logsdR)
-  sdS <- exp(logsdS)
-  sdF <- exp(logsdF)      
-  sdO <- exp(logsdO)
-  logFF <- logF[,keyF] ## expand F
-  F <- exp(logFF)
-  ssb <- ssbFUN(exp(logN),exp(logFF),M,SW,MO,PF,PM)
+  sigR <- exp(logsigR)
+  ssb <- calc_ssb(exp(logN),Faa,natmat,waa,mature)
+  
+  Faa = Fmort * slx_fsh
+  Z = M + Fmort
+  S = exp(-Z)
+  Naa(y,a) = exp(mean_log_rec + rec_dev(y))
+  Naa(y+1,2) = Naa(y,a-1)*S(y, a-1)
+  Naa(y+1,nage) = Naa(y,nage)*S(y,nage)
+  logQaa = log(exp(logQ)*srv_slx)
+  logPredIndex = logQaa * logN - Z * sampleTimes
+  logPred[i] <- logQ[keyQ[f,a]]+logN[y,a]-Z*sampleTimes[f]
+  
+  # multinomial
+  jnll <- jnll - dmultinom(obserror * obs, pred, 1)
   
   jnll <- 0
   
@@ -85,7 +81,7 @@ f<-function(par){
     if(!(srmode%in%c(0,1,2))){
       stop(paste("srmode", srmode,"not implemented yet"))
     }      
-    jnll <- jnll - dnorm(logN[y,1],pred,sdR,log=TRUE)
+    jnll <- jnll - dnorm(logN[y,1],pred,sigR,log=TRUE)
   }  
   for(y in 2:nrow){
     for(a in 2:ncol){
@@ -96,35 +92,6 @@ f<-function(par){
       jnll <- jnll - dnorm(logN[y,a],pred,sdS,log=TRUE)
     }
   }
-  
-  SigmaF <- matrix(0, ncol(logF),ncol(logF))
-  if(fcormode==0){
-    diag(SigmaF) <- sdF*sdF
-  }
-  if(fcormode==1){
-    diag(SigmaF) <- sdF*sdF
-    rhoF <- 2*plogis(transRhoF[1])-1
-    for(i in 2:ncol(logF)){
-      for(j in 1:(i-1)){
-        SigmaF[i,j] <- rhoF*sdF[i]*sdF[j]
-        SigmaF[j,i] <- SigmaF[i,j] 
-      }
-    }
-  }
-  if(fcormode==2){
-    diag(SigmaF) <- sdF*sdF
-    rhoF <- 2*plogis(transRhoF[1])-1
-    for(i in 2:ncol(logF)){
-      for(j in 1:(i-1)){
-        SigmaF[i,j] <- sdF[i]*sdF[j]*(rhoF^(i-j))
-        SigmaF[j,i] <- SigmaF[i,j] 
-      }
-    }
-  }
-  for(y in 2:nrow){
-    jnll <- jnll - dmvnorm(logF[y,],logF[y-1,],SigmaF,log=TRUE)
-  }
-  
   logPred <- numeric(nobs)  
   for(i in 1:nobs){
     y <- aux[i,1]-minYear+1
@@ -141,39 +108,7 @@ f<-function(par){
       stop("This fleet type is has not been implemented yet")
     }
   }
-  Slist<-list()
-  for(f in unique(aux[,2])){ # each fleet
-    if(covType[f]==0){# independent      
-      S <- diag(sdO[na.omit(keySd[f,])]^2)
-    }
-    if(covType[f]==1){# IGAR      
-      S <- diag(sdO[na.omit(keySd[f,])]^2)  
-      dist <- cumsum(c(0,exp(logIGARdist[na.omit(keyIGAR[f,])])))
-      for(i in 2:ncol(S)){
-        for(j in 1:(i-1)){
-          S[i,j] <- sqrt(S[i,i])*sqrt(S[j,j])*(0.5^(dist[i]-dist[j]))
-          S[j,i] <- S[i,j]
-        }
-      }
-    }
-    if(covType[f]==2){# US
-      idx <- which(f==unlist(sapply(1:length(dat$covType), function(f)if(dat$covType[f]==2)unstructured(dat$fleetDim[f])$parms()+f))) 
-      D <- diag(sdO[na.omit(keySd[f,])])
-      R <- unstructured(nrow(D))$corr(parUS[idx])
-      S <- D%*%R%*%D
-    }
-    if(!covType[f]%in%c(0,1,2)){#       
-      stop("Covariance type not implemented")
-    }
-    Slist[[length(Slist)+1]]<-S    
-    for(y in unique(aux[,1])){ # year within fleet 
-      idx <- which((aux[,2]==f) & (aux[,1]==y))
-      if(length(idx)!=0){
-        jnll <- jnll - dmvnorm(logobs[idx],logPred[idx],S,log=TRUE)  
-      }
-    }
-  }
-  REPORT(Slist)
+  
   REPORT(logPred)
   logssb<-log(ssb)
   ADREPORT(logssb)
