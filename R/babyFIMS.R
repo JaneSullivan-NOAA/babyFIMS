@@ -1,7 +1,8 @@
 library(RTMB)
 load("data/am2022.RData")
+source("R/helper.R")
 
-head(input$obsdf) # long format with all observations
+head(input$obsdf, 5) # long format with all observations
 # obs_type # 0=catch, 1=index, 2=agecom, 3=lencomp
 # nll_type # 0=dnorm, 1=dmultinom
 # fit_data # 1/0=TRUE/FALSE
@@ -12,42 +13,10 @@ head(input$obsdf) # long format with all observations
 #Remove length comps for now till we implement them
 input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
 
-#Add a likelihood calculation index to the obs data frame
-input$obsdf <- cbind(input$obsdf,input$obsdf$obs_type)
-colnames(input$obsdf)[10] <- "likelihood_index"
-like_index <- 1
-#Loop over all observations to identify multinomial 
-#observations with linked likelihoods
-for(i in seq_along(input$obsdf$obs_type)){
-  if(i==1){
-    #Set the first observation at index 1
-    input$obsdf$likelihood_index[i] <- like_index 
-  }else if(input$obsdf$obs_type[i]!=input$obsdf$obs_type[i-1]){
-    #If observation type changes then increment
-    like_index <- like_index + 1
-    input$obsdf$likelihood_index[i] <- like_index 
-  }else if(input$obsdf$obs_type[i]<2){
-    #All catches and indices are independent values so always increment
-    like_index <- like_index + 1
-    input$obsdf$likelihood_index[i] <- like_index 
-  }else if(input$obsdf$year[i]!=input$obsdf$year[i-1]){
-    #Increment if the year of composition changes
-    like_index <- like_index + 1
-    input$obsdf$likelihood_index[i] <- like_index 
-  }else if(input$obsdf$fleet[i]!=input$obsdf$fleet[i-1]){
-    #Increment if the fleet of composition changes
-    like_index <- like_index + 1
-    input$obsdf$likelihood_index[i] <- like_index 
-  }else{
-    #If year and fleet don't change then comps will be combined for a 
-    #single multinomial likelihood calculation
-    input$obsdf$likelihood_index[i] <- like_index 
-  }
-}
-
 dat <- list()
 dat$obs <- input$obsdf$obs
 dat$aux <- input$obsdf
+dat$aux <- get_likelihood_index(dat$aux)
 dat$year <- input$years
 dat$minYear <- min(dat$year)
 dat$age <-  input$ages
