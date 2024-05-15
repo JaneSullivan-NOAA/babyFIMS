@@ -1,8 +1,12 @@
 library(RTMB)
+library(dplyr) # sry Nathan! :D
+library(tidyr)
+
 load("data/am2022.RData")
 source("R/helper.R")
 
 head(input$obsdf, 5) # long format with all observations
+# found myself wanting a unique identifier for each data set... anyone else?
 # obs_type # 0=catch, 1=index, 2=agecom, 3=lencomp
 # nll_type # 0=dnorm, 1=dmultinom
 # fit_data # 1/0=TRUE/FALSE
@@ -13,9 +17,11 @@ head(input$obsdf, 5) # long format with all observations
 #Remove length comps for now till we implement them
 input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
 
+# data list ----
 dat <- list()
 dat$obs <- input$obsdf$obs
 dat$aux <- input$obsdf
+dat$aux <- get_id(dat$aux)
 dat$aux <- get_likelihood_index(dat$aux)
 dat$year <- input$years
 dat$minYear <- min(dat$year)
@@ -29,8 +35,10 @@ dat$mature <- input$maturity
 dat$fleetTypes <- unique(input$obsdf$fleet) 
 dat$srmode <- 1
 
+# prediction data frame
+dat$pred <- get_pred(dat$aux)
 
-
+# parameter ----
 par <- list()
 par$logsigR <- log(input$sigr)
 par$logQ <- log(input$q)
@@ -39,9 +47,8 @@ par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$ag
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
 par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
 par$logN <- matrix(0, nrow=length(dat$year), ncol=length(dat$age))
-par$logF <- matrix(0, nrow=length(dat$year), ncol=1)
-# need to make this parametric
-par$logfshslx <- log(input$fsh_slx)
+par$logFmort <- matrix(0, nrow=length(dat$year), ncol=1)
+par$logfshslx <- log(input$fsh_slx) # need parametric selectivity
 par$logsrvslx <- log(input$fsh_slx)
 
 # todo
@@ -49,17 +56,25 @@ calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
   rowSums(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)
 }
 
+# model ----
 f<-function(par){ # note dat isn't an argument in the fxn
   getAll(par, dat) # RTMB's attach
   obs <- OBS(obs) # access simulation, OSA residuals
-  # logobs[is.na(logobs)] <- missing # i think this messes up the OBS...
-  nobs <- length(obs)    
-  nrow <- nrow(logM)
-  ncol <- ncol(logM)
+  
+  nobs <- length(obs) 
+  nyear <- length(year)
+  nage <- length(age)
+  
   sigR <- exp(logsigR)
+  M <- exp(logM)
+  Q <- exp(logQ)
+  Fmort <- exp(logFmort)
+  fshslx <- exp(logfshslx)
+  srvslx <- exp(logsrvslx)
+  Faa <- matrix(data = 1, nrow = nyear, ncol = nage) 
+  for(y in 1:nyear) Faa[y,] = Fmort[i,] * fshslx 
   
-  Faa = Fmort * slx_fsh
-  
+  Faa+M
   #ssb <- calc_ssb(exp(logN),Faa,natmat,waa,mature)
   
   # Z = M + Fmort
@@ -91,7 +106,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
   
   jnll <- 0
   
-  for(y in 2:nrow){
+  for(y in 2:nyear){
     thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1]) 
     if(srmode==0){ #RW
       pred <- logN[y-1,1]

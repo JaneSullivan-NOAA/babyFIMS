@@ -1,3 +1,15 @@
+library(dplyr) # sry Nathan! :D
+library(tidyr)
+
+# get unique ID (integer value) for each data set
+get_id <- function(myaux){
+  myaux <- myaux %>% 
+    dplyr::group_by(obs_type, nll_type, fleet) %>% 
+    dplyr::mutate(id = dplyr::cur_group_id(), .before = obs_type) %>% 
+    dplyr::ungroup()
+  return(myaux)
+}
+
 
 #Add a likelihood calculation index to the obs data frame
 get_likelihood_index <- function(myaux) {
@@ -33,4 +45,33 @@ get_likelihood_index <- function(myaux) {
     }
   }
   return(myaux)
+}
+
+# get prediction dataframe for observations (expanding to the full range of
+# observations)
+get_pred <- function(myaux) {
+  
+  lkup <- myaux %>% dplyr::distinct(id, obs_type, nll_type, fleet)
+  
+  pred <- dplyr::bind_rows(
+    # catch and index data
+    myaux %>% 
+      dplyr::filter(obs_type %in% c(0, 1)) %>% 
+      dplyr::select(id, year, obs, age, len, likelihood_index) %>% 
+      tidyr::complete(id, year),
+    # age comp data
+    myaux %>% 
+      dplyr::filter(obs_type %in% c(2)) %>% 
+      dplyr::select(id, year, obs, age, len, likelihood_index) %>% 
+      tidyr::complete(id, nesting(year, age)), 
+    # len comp data
+    myaux %>% 
+      dplyr::filter(obs_type %in% c(3)) %>% 
+      dplyr::select(id, year, obs, age, len, likelihood_index) %>% 
+      tidyr::complete(id, nesting(year, len))
+  )
+  pred <- pred %>% 
+    dplyr::left_join(lkup) %>% 
+    dplyr::relocate(names(lkup), .before = year)
+  return(pred)
 }
