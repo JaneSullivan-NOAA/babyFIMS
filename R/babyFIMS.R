@@ -36,14 +36,15 @@ dat$fleetTypes <- unique(input$obsdf$fleet)
 dat$srmode <- 1
 
 # prediction data frame
-dat$pred <- get_pred(dat$aux)
+dat$predObs <- get_pred(dat$aux)
 
-idx <- which(!is.na(dat$y)) 
-sum(dnorm(y[idx], mean=lam[idx], sd=sdObs, log=TRUE))
+# idx <- which(!is.na(dat$y)) 
+# sum(dnorm(y[idx], mean=lam[idx], sd=sdObs, log=TRUE))
 
 # parameter ----
 par <- list()
 par$logsigR <- log(input$sigr)
+par$logsigN <- log(0.5)
 par$logQ <- log(input$q)
 # is M a constant in FIMS or by year/age?
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
@@ -56,7 +57,7 @@ par$logsrvslx <- log(input$fsh_slx)
 
 # todo
 calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
-  rowSums(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)
+  sum(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)
 }
 
 # model ----
@@ -69,22 +70,63 @@ f<-function(par){ # note dat isn't an argument in the fxn
   nage <- length(age)
   
   sigR <- exp(logsigR)
+  sigN <- exp(logsigN)
   M <- exp(logM)
   Q <- exp(logQ)
   Fmort <- exp(logFmort)
   fshslx <- exp(logfshslx)
   srvslx <- exp(logsrvslx)
   Faa <- matrix(data = 1, nrow = nyear, ncol = nage) 
-  for(y in 1:nyear) Faa[y,] = Fmort[i,] * fshslx 
+  for(y in 1:nyear) Faa[y,] = Fmort[y,] * fshslx 
   
-  Faa+M
-  #ssb <- calc_ssb(exp(logN),Faa,natmat,waa,mature)
+  Z <- Faa+M
   
-  # Z = M + Fmort
-  # S = exp(-Z)
-  # Naa[y,a] = exp(mean_log_rec + rec_dev[y])
-  # Naa[y+1,2] = Naa[y,a-1]*S[y, a-1]
-  # Naa[y+1,nage] = Naa[y,nage]*S[y,nage]
+  jnll <- 0
+  
+  ssb <- rep(NA, nyear)
+  for(y in 1:nyear) ssb[y] <- calc_ssb(exp(logN[y,]),Faa[y,],M[y,],waa,mature,spawnTimes)
+  
+  predR <- rep(NA, nyear)
+  for(y in 1:nyear){
+    thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1]) 
+    if(srmode==0){ #RW
+      if (y == 1){
+        predR[y] <- logN[y,1] # need to fix this later
+      }else{
+        predR[y] <- logN[y-1,1]
+      }
+    }
+    if(srmode==1){ #Ricker
+      predR[y] <- rickerpar[1]+log(thisSSB)-exp(rickerpar[2])*thisSSB
+    }
+    if(srmode==2){ #BH
+      predR[y] <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
+    }
+    if(!(srmode%in%c(0,1,2))){
+      stop(paste("srmode", srmode,"not implemented yet"))
+    }      
+    jnll <- jnll - dnorm(logN[y,1],predR[y],sigR,log=TRUE)
+  }  
+  
+  predlogN <- matrix(NA, nrow=nyear, ncol=nage)
+  for(y in 2:nyear){
+    for(a in 2:nage){
+      predlogN[y,a] <- logN[y-1,a-1]-Faa[y-1,a-1]-M[y-1,a-1]
+      if(a==nage){
+        predlogN[y,a] <- log(exp(predlogN[y,a])+exp(logN[y-1,a]-Faa[y-1,a]-M[y-1,a]))
+      }
+      jnll <- jnll - dnorm(logN[y,a],predlogN[y,a],sigN,log=TRUE)
+    }
+  }
+
+  # need to modify this to allow for multiple fleets
+  logpredcatchatage <- logN-log(Z)+log(1-exp(-Z))+log(Faa)
+  
+  for (i in which(predObs$obs_type == 0)){
+    y <- which(year == predObs$year[i])
+    predObs$pred[i] <- sum(logpredcatchatage[y,])
+  }
+  
   # pred catch, sum over ages
   # logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(Faa[y,a])
   # 
