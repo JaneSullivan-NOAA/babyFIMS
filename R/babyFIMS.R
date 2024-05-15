@@ -38,6 +38,9 @@ dat$srmode <- 1
 # prediction data frame
 dat$pred <- get_pred(dat$aux)
 
+idx <- which(!is.na(dat$y)) 
+sum(dnorm(y[idx], mean=lam[idx], sd=sdObs, log=TRUE))
+
 # parameter ----
 par <- list()
 par$logsigR <- log(input$sigr)
