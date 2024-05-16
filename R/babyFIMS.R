@@ -121,10 +121,11 @@ f<-function(par){ # note dat isn't an argument in the fxn
 
   # need to modify this to allow for multiple fleets
   logpredcatchatage <- logN-log(Z)+log(1-exp(-Z))+log(Faa)
-  
+
+  # obs_type 0 is aggregate catch in weight (need to figure out units)
   for (i in which(predObs$obs_type == 0)){
     y <- which(year == predObs$year[i])
-    predObs$pred[i] <- sum(logpredcatchatage[y,])
+    predObs$pred[i] <- log(sum(exp(logpredcatchatage[y,]) * waa)/1e6) # divisor assumes waa in grams and aggregate catch in metric tons
   }
   
   # pred catch, sum over ages
