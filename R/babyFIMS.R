@@ -144,16 +144,15 @@ f<-function(par){ # note dat isn't an argument in the fxn
   tmp <- exp(logpredcatchatage)
   tmptot <- rowSums(tmp)
   tmp <- tmp/tmptot
-  # subsets out 1989 and 2022, jane will work on expanding predObs, nathan will
-  # work on generic filter within fn()
-  tmp <- tmp[1:(length(tmp[,1])-2),] 
-
+  # subsets out 1989 and 2022, because they are not in predObs
+  tmp <- tmp[which(year %in% predObs$year[which(predObs$obs_type == 2 & predObs$fleet == 1)]),]
+  
   # survey
   tmp2 <- exp(logpredindexatage)
   tmptot2 <- rowSums(tmp2)
   tmp2 <- tmp2/tmptot2
-  tmp2 <- tmp2[1:(length(tmp2[,1])-2),] # see note above!!!!
-
+  tmp2 <- tmp2[which(year %in% predObs$year[which(predObs$obs_type == 2 & predObs$fleet == 2)]),]
+  
   # combine and vectorize
   tmp3 <- rbind(tmp,tmp2)
   out <- NULL
