@@ -55,7 +55,7 @@ par$logFmort <- matrix(0, nrow=length(dat$year), ncol=1)
 par$logfshslx <- log(input$fsh_slx) # need parametric selectivity
 par$logsrvslx <- log(input$fsh_slx)
 
-# todo
+# assumes vectors at age are supplied to function for N, F, M, W, and mature
 calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
   sum(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)
 }
