@@ -1,5 +1,5 @@
 library(RTMB)
-library(dplyr) # sry Nathan! :D
+library(dplyr) 
 library(tidyr)
 
 load("data/am2022.RData")
@@ -37,9 +37,6 @@ dat$srmode <- 1
 
 # prediction data frame
 dat$predObs <- get_pred(dat$aux)
-
-# idx <- which(!is.na(dat$y)) 
-# sum(dnorm(y[idx], mean=lam[idx], sd=sdObs, log=TRUE))
 
 # parameter ----
 par <- list()
@@ -119,24 +116,76 @@ f<-function(par){ # note dat isn't an argument in the fxn
     }
   }
 
+  # predicted catch ----
+  
+  # get_pred_logCaa(idx, # lkup vector linking to predObs, aux with appropriate flt opts
+  #              Z, logN, Faa) # Z, logN, Faa are also vectors
   # need to modify this to allow for multiple fleets
   logpredcatchatage <- logN-log(Z)+log(1-exp(-Z))+log(Faa)
 
   # obs_type 0 is aggregate catch in weight (need to figure out units)
   for (i in which(predObs$obs_type == 0)){
     y <- which(year == predObs$year[i])
-    predObs$pred[i] <- log(sum(exp(logpredcatchatage[y,]) * waa)/1e6) # divisor assumes waa in grams and aggregate catch in metric tons
+    predObs$pred[i] <- log(sum(exp(logpredcatchatage[y,]) * waa)/1e6) # waa in g and aggregate catch in t
   }
   
-  # pred catch, sum over ages
-  # logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(Faa[y,a])
-  # 
-  # # survey biomass index, sum over ages
-  # pred = logQ + logsrvslx + log(exp(logN) * waa) - Z * sampleTimes
+  # predicted survey biomass ----
+  logpredindexatage <- logQ + logsrvslx + logN - Z * sampleTimes
+
+  # obs_type 1 is survey biomass in weight (need to figure out units)
+  for (i in which(predObs$obs_type == 1)){
+    y <- which(year == predObs$year[i])
+    predObs$pred[i] <- log(sum(exp(logpredindexatage[y,]) * waa)/1e6) # waa in g and aggregate srv biom in t
+  }
+  
+  # age comps (age error not included) ----
+  
+  # fishery
+  tmp <- exp(logpredcatchatage)
+  tmptot <- rowSums(tmp)
+  tmp <- tmp/tmptot
+  # subsets out 1989 and 2022, jane will work on expanding predObs, nathan will
+  # work on generic filter within fn()
+  tmp <- tmp[1:(length(tmp[,1])-2),] 
+
+  # survey
+  tmp2 <- exp(logpredindexatage)
+  tmptot2 <- rowSums(tmp2)
+  tmp2 <- tmp2/tmptot2
+  tmp2 <- tmp2[1:(length(tmp2[,1])-2),] # see note above!!!!
+
+  # combine and vectorize
+  tmp3 <- rbind(tmp,tmp2)
+  out <- NULL
+  
+  # wow!
+  for(i in seq_along(tmp3[,1])) out <- c(out, tmp3[i,])
+  predObs$pred[which(predObs$obs_type == 2)] <- out 
+  
+  # observation likelihoods
+  
+  for (i in unique(predObs$likelihood_index[!is.na(predObs$likelihood_index)])){
+    
+    tmp <- predObs[which(predObs$likelihood_index==i), ] # drop retains matrix structure
+    
+    # dnorm for catches, indices
+    if(tmp$nll_type==0) {
+      jnll <- jnll - dnorm(tmp$obs, tmp$pred, tmp$obserror, 1)
+    }
+    # multinomial for comps
+    if(tmp$nll_type==1) {
+      # for()
+      # sum(tmp$pred)
+      # sum(tmp$obs + 1e-10)
+      jnll <- jnll - dmultinom(sum(tmp$obserror * (tmp$obs + 1e-10)), sum(tmp$pred), 1)
+    }
+  }
+  
+
   # jnll <- jnll - dnorm(obs, pred, obserror, 1)
   # # age comp
   # tmp = exp(logsrvslx + logN - Z * sampleTimes)
-  # pred = tmp / sum(tmp) # this is where ageing error would be applied
+  # pred = ageerror * tmp / sum(tmp) # this is where ageing error would be applied
   # jnll <- jnll - dmultinom(obserror*obs, pred, 1)
   
   #section to calculate population abundance
@@ -150,24 +199,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
     
   }
   
-  jnll <- 0
   
-  for(y in 2:nyear){
-    thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1]) 
-    if(srmode==0){ #RW
-      pred <- logN[y-1,1]
-    }
-    if(srmode==1){ #Ricker
-      pred <- rickerpar[1]+log(thisSSB)-exp(rickerpar[2])*thisSSB
-    }
-    if(srmode==2){ #BH
-      pred <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
-    }
-    if(!(srmode%in%c(0,1,2))){
-      stop(paste("srmode", srmode,"not implemented yet"))
-    }      
-    jnll <- jnll - dnorm(logN[y,1],pred,sigR,log=TRUE)
-  }  
   for(y in 2:nrow){
     for(a in 2:ncol){
       pred <- logN[y-1,a-1]-F[y-1,a-1]-M[y-1,a-1]

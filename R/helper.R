@@ -57,17 +57,17 @@ get_pred <- function(myaux) {
     # catch and index data
     myaux %>% 
       dplyr::filter(obs_type %in% c(0, 1)) %>% 
-      dplyr::select(id, year, obs, age, len, likelihood_index) %>% 
+      dplyr::select(id, year, obs, obserror, age, len, likelihood_index) %>% 
       tidyr::complete(id, year),
     # age comp data
     myaux %>% 
       dplyr::filter(obs_type %in% c(2)) %>% 
-      dplyr::select(id, year, obs, age, len, likelihood_index) %>% 
+      dplyr::select(id, year, obs, obserror, age, len, likelihood_index) %>% 
       tidyr::complete(id, nesting(year, age)), 
     # len comp data
     myaux %>% 
       dplyr::filter(obs_type %in% c(3)) %>% 
-      dplyr::select(id, year, obs, age, len, likelihood_index) %>% 
+      dplyr::select(id, year, obs, obserror, age, len, likelihood_index) %>% 
       tidyr::complete(id, nesting(year, len))
   )
   pred <- pred %>% 
