@@ -184,6 +184,14 @@ total_mort <- rep(0,n_years*n_ages*n_growth_morphs)
 
 catch <- rep(0,n_years*n_fleets*n_ages*n_growth_morphs)
 
+survey_year <- rep(year_index,n_surveys)
+survey_age <- rep(age_index,n_surveys)
+survey_length <- rep(length_index,n_surveys)
+
+survey_obs_frac <- rep(0,n_years*n_surveys*n_ages*n_growth_morphs)
+
+survey_intercept <- rep(0,n_years*n_surveys*n_ages*n_growth_morphs)
+
 for(i in seq_along(Growth_transition[,1]))
 {
   sink_index <- Growth_transition$growth_sink[i]
@@ -219,7 +227,16 @@ for(i in seq_along(Growth_transition[,1]))
                                                                           catch_age==age_index[sink_index] &
                                                                           catch_length==length_index[sink_index])] + (fish_mort[which(catch_year==year_index[sink_index] &
                                                                                                                                         catch_age==age_index[sink_index] &
-                                                                                                                                        catch_length==length_index[sink_index])]/total_mort[sink_index])*abundance[sink_index]*(1-exp(-total_mort[sink_index])) 
+                                                                                                                                        catch_length==length_index[sink_index])]/total_mort[sink_index])*abundance[sink_index]*(1-exp(-total_mort[sink_index]))
+    
+    survey_intercept[which(survey_year==year_index[sink_index] &
+                  survey_age==age_index[sink_index] &
+                  survey_length==length_index[sink_index])]<-survey_intercept[which(survey_year==year_index[sink_index] &
+                                                                          survey_age==age_index[sink_index] &
+                                                                          survey_length==length_index[sink_index])] + abundance[sink_index]*(1-exp(-survey_obs_frac[which(catch_year==year_index[sink_index] &
+                                                                                                                                                                            catch_age==age_index[sink_index] &
+                                                                                                                                                                            catch_length==length_index[sink_index])])) 
+    
     abundance[sink_index] <- abundance[sink_index]*exp(-total_mort[sink_index])
     
     total_mort[source_index] <- sum(nat_mort_index[source_index],fish_mort[which(catch_year==year_index[source_index] &
@@ -258,6 +275,10 @@ for(i in seq_along(Growth_transition[,1]))
 #TODO: Still need to write up logic for interpolating between abundance values
 #to calculate length comps.
 #
+for(i in fleets){
+  
+}
+
 #
 #
 
