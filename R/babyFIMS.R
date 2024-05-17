@@ -234,9 +234,21 @@ f<-function(par){ # note dat isn't an argument in the fxn
   jnll
 }    
 
+fill_vals <- function(x,vals){rep(as.factor(vals), length(x))}
+
+map <- par
+map$logsigR <- fill_vals(map$logsigR, NA)
+map$logsigN <- fill_vals(map$logsigN, NA)
+map$logQ <- fill_vals(map$logQ, NA)
+map$logM <- fill_vals(map$logM, NA)
+map$logfshslx <- fill_vals(map$logfshslx, NA)
+map$logsrvslx <- fill_vals(map$logsrvslx, NA)
+
 obj <- MakeADFun(f, par, 
                  #random=c("logN", "logF", "missing"), 
                  #map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), 
+                 #random=c("logN", "logFmort"),
+                 map=map,
                  silent=FALSE)
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
 opt$objective
