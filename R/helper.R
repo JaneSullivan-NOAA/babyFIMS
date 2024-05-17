@@ -72,7 +72,6 @@ get_pred <- function(myaux) {
   )
   pred <- pred %>% 
     dplyr::left_join(lkup) %>% 
-    dplyr::relocate(names(lkup), .before = year) %>%
-    mutate(pred = 0)
+    dplyr::relocate(names(lkup), .before = year) 
   return(pred)
 }

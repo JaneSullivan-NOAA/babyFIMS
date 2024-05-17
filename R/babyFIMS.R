@@ -36,7 +36,7 @@ dat$fleetTypes <- unique(input$obsdf$fleet)
 dat$srmode <- 0
 
 # prediction data frame
-dat$predObs <- get_pred(dat$aux)
+dat$aux <- get_pred(dat$aux)
 
 # parameter ----
 par <- list()
@@ -61,7 +61,7 @@ calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
 f<-function(par){ # note dat isn't an argument in the fxn
   getAll(par, dat) # RTMB's attach
   obs <- OBS(obs) # access simulation, OSA residuals
-  pred_Obs_vec <- rep(0, length(predObs[,1]))
+  predObs <- rep(0, nrow(aux))
   nobs <- length(obs) 
   nyear <- length(year)
   nage <- length(age)
@@ -74,13 +74,13 @@ f<-function(par){ # note dat isn't an argument in the fxn
   fshslx <- exp(logfshslx)
   srvslx <- exp(logsrvslx)
   Faa <- matrix(data = 1, nrow = nyear, ncol = nage) 
-  for(y in 1:nyear) Faa[y,] = Fmort[y,] * fshslx 
-  
-  Z <- Faa+M
   
   jnll <- 0
   
-  ssb <- rep(NA, nyear)
+  #section to calculate population abundance
+  for(y in 1:nyear) Faa[y,] = Fmort[y,] * fshslx 
+  Z <- Faa+M
+  ssb <- rep(0, nyear)
   for(y in 1:nyear) ssb[y] <- calc_ssb(exp(logN[y,]),Faa[y,],M[y,],waa,mature,spawnTimes)
   
   predlogR <- rep(0, nyear)
@@ -118,24 +118,24 @@ f<-function(par){ # note dat isn't an argument in the fxn
 
   # predicted catch ----
   
-  # get_pred_logCaa(idx, # lkup vector linking to predObs, aux with appropriate flt opts
+  # get_pred_logCaa(idx, # lkup vector linking to aux, aux with appropriate flt opts
   #              Z, logN, Faa) # Z, logN, Faa are also vectors
   # need to modify this to allow for multiple fleets
   logpredcatchatage <- logN-log(Z)+log(1-exp(-Z))+log(Faa)
 
   # obs_type 0 is aggregate catch in weight (need to figure out units)
-  for (i in which(predObs$obs_type == 0)){
-    y <- which(year == predObs$year[i])
-    predObs$pred[i] <- log(sum(exp(logpredcatchatage[y,]) * waa)/1e6) # waa in g and aggregate catch in t
+  for (i in which(aux$obs_type == 0)){
+    y <- which(year == aux$year[i])
+    predObs[i] <- log(sum(exp(logpredcatchatage[y,]) * waa)/1e6) # waa in g and aggregate catch in t
   }
   
   # predicted survey biomass ----
   logpredindexatage <- logQ + logsrvslx + logN - Z * sampleTimes
 
   # obs_type 1 is survey biomass in weight (need to figure out units)
-  for (i in which(predObs$obs_type == 1)){
-    y <- which(year == predObs$year[i])
-    predObs$pred[i] <- log(sum(exp(logpredindexatage[y,]) * waa)/1e6) # waa in g and aggregate srv biom in t
+  for (i in which(aux$obs_type == 1)){
+    y <- which(year == aux$year[i])
+    predObs[i] <- log(sum(exp(logpredindexatage[y,]) * waa)/1e6) # waa in g and aggregate srv biom in t
   }
   
   # age comps (age error not included) ----
@@ -144,14 +144,14 @@ f<-function(par){ # note dat isn't an argument in the fxn
   tmp <- exp(logpredcatchatage)
   tmptot <- rowSums(tmp)
   tmp <- tmp/tmptot
-  # subsets out 1989 and 2022, because they are not in predObs
-  tmp <- tmp[which(year %in% predObs$year[which(predObs$obs_type == 2 & predObs$fleet == 1)]),]
+  # subsets out 1989 and 2022, because they are not in aux
+  tmp <- tmp[which(year %in% aux$year[which(aux$obs_type == 2 & aux$fleet == 1)]),]
   
   # survey
   tmp2 <- exp(logpredindexatage)
   tmptot2 <- rowSums(tmp2)
   tmp2 <- tmp2/tmptot2
-  tmp2 <- tmp2[which(year %in% predObs$year[which(predObs$obs_type == 2 & predObs$fleet == 2)]),]
+  tmp2 <- tmp2[which(year %in% aux$year[which(aux$obs_type == 2 & aux$fleet == 2)]),]
   
   # combine and vectorize
   tmp3 <- rbind(tmp,tmp2)
@@ -159,13 +159,14 @@ f<-function(par){ # note dat isn't an argument in the fxn
   
   # wow!
   for(i in seq_along(tmp3[,1])[-1]) out <- c(out, tmp3[i,])
-  predObs$pred[which(predObs$obs_type == 2)] <- out 
+  predObs[which(aux$obs_type == 2)] <- out 
   
-  # observation likelihoods
+  # observational likelihoods ----
   
-  for (i in unique(predObs$likelihood_index[!is.na(predObs$likelihood_index)])){
+  for (i in unique(aux$likelihood_index[!is.na(aux$likelihood_index)])){
     
-    tmp <- predObs[which(predObs$likelihood_index==i), ] # drop retains matrix structure
+    tmp <- aux[which(aux$likelihood_index==i), ] 
+    tmppred <- predObs[which(aux$likelihood_index==i)] 
     
     unique_nll_type <- unique(tmp$nll_type)
     if(length(unique_nll_type)>1) stop("multiple nll types within tmp")
@@ -173,62 +174,14 @@ f<-function(par){ # note dat isn't an argument in the fxn
     # dnorm for catches, indices
     if(unique_nll_type==0) {
       browser()
-      jnll <- jnll - RTMB::dnorm(tmp$obs, tmp$pred, tmp$obserror, 1)
+      jnll <- jnll - RTMB::dnorm(tmp$obs, tmppred, tmp$obserror, 1)
     }
     # multinomial for comps
     if(unique_nll_type==1) {
-      # for()
-      # sum(tmp$pred)
-      # sum(tmp$obs + 1e-10)
-      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, NULL, tmp$pred, 1)
+      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, NULL, tmppred, 1)
     }
   }
-  
 
-  # jnll <- jnll - dnorm(obs, pred, obserror, 1)
-  # # age comp
-  # tmp = exp(logsrvslx + logN - Z * sampleTimes)
-  # pred = ageerror * tmp / sum(tmp) # this is where ageing error would be applied
-  # jnll <- jnll - dmultinom(obserror*obs, pred, 1)
-  
-  #section to calculate population abundance
-  
-  
-  # #section to calculate predicted values
-  # dat_aux_pred 
-  # 
-  # #section to calculate likelihoods
-  # for(i in unique(dat$aux$likelihood_index)){
-  #   
-  # }
-  # 
-  # 
-  # for(y in 2:nrow){
-  #   for(a in 2:ncol){
-  #     pred <- logN[y-1,a-1]-F[y-1,a-1]-M[y-1,a-1]
-  #     if(a==ncol){
-  #       pred <- log(exp(pred)+exp(logN[y-1,a]-F[y-1,a]-M[y-1,a]))
-  #     }
-  #     jnll <- jnll - dnorm(logN[y,a],pred,sdS,log=TRUE)
-  #   }
-  # }
-  # logPred <- numeric(nobs)  
-  # for(i in 1:nobs){
-  #   y <- aux[i,1]-minYear+1
-  #   f <- aux[i,2]
-  #   a <- aux[i,3]-minAge+1
-  #   Z <- F[y,a]+M[y,a]
-  #   if(fleetTypes[f]==0){
-  #     logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(F[y,a])
-  #   }
-  #   if(fleetTypes[f]==2){  
-  #     logPred[i] <- logQ[keyQ[f,a]]+logN[y,a]-Z*sampleTimes[f]
-  #   }
-  #   if(!(fleetTypes[f]%in%c(0,2))){  
-  #     stop("This fleet type is has not been implemented yet")
-  #   }
-  # }
-  # 
   # REPORT(logPred)
   # logssb<-log(ssb)
   # ADREPORT(logssb)
