@@ -179,7 +179,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
       # for()
       # sum(tmp$pred)
       # sum(tmp$obs + 1e-10)
-      jnll <- jnll - dmultinom(tmp$obserror * (tmp$obs + 1e-10), NULL, tmp$pred, 1)
+      jnll <- jnll - dmultinom(tmp$obserror * tmp$obs, NULL, tmp$pred, 1)
     }
   }
   
