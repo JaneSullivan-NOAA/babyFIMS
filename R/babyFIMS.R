@@ -166,14 +166,14 @@ f<-function(par){ # note dat isn't an argument in the fxn
   for (i in unique(aux$likelihood_index[!is.na(aux$likelihood_index)])){
     
     tmp <- aux[which(aux$likelihood_index==i), ] 
-    tmppred <- predObs[which(aux$likelihood_index==i)] 
+    tmppred <- as.numeric(predObs[which(aux$likelihood_index==i)])
     
     unique_nll_type <- unique(tmp$nll_type)
     if(length(unique_nll_type)>1) stop("multiple nll types within tmp")
     
     # dnorm for catches, indices
     if(unique_nll_type==0) {
-      browser()
+      #browser()
       jnll <- jnll - RTMB::dnorm(tmp$obs, tmppred, tmp$obserror, 1)
     }
     # multinomial for comps
