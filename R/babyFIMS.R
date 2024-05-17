@@ -166,7 +166,46 @@ f<-function(par){ # note dat isn't an argument in the fxn
   
   # length comps ----
   
+  tmp5 <- exp(logpredcatchatage)
+  tmptot5 <- rowSums(tmp5)
+  tmp5 <- tmp5/tmptot5
+  tmp5 <- tmp5[which(year %in% aux$year[which(aux$obs_type == 3 & aux$fleet == 1)]),]
   
+  predcatchatlength <- tmp5[,rep(1,length(sizeage[1,]))]
+  
+  # This is a matrix version of the elementwise loop below
+  #
+  # predcatchatlength2 <- tmp5[,rep(1,length(sizeage[1,]))]
+  # for(i in seq_along(year)){
+  #   predcatchatlength2[i,]<- tmp5[i,] %*% sizeage 
+  # }
+  
+  for(i in seq_along(year)){
+    for(j in seq_along(len)){
+      predcatchatlength[i,j] <- sum(sizeage[,j]*tmp5[i,])
+    }
+  }
+  
+  tmp6 <- exp(logpredcatchatage)
+  tmptot6 <- rowSums(tmp6)
+  tmp6 <- tmp6/tmptot6
+  tmp6 <- tmp6[which(year %in% aux$year[which(aux$obs_type == 3 & aux$fleet == 2)]),]
+  
+  predcatchatlength2 <- tmp6[,rep(1,length(sizeage[1,]))]
+  
+  for(i in seq_along(year)){
+    for(j in seq_along(len)){
+      predcatchatlength2[i,j] <- sum(sizeage[,j]*tmp6[i,])
+    }
+  }
+  
+  # combine and vectorize
+  tmp7 <- rbind(predcatchatlength,predcatchatlength2)
+  out2 <- tmp7[1,]
+  
+  # wow!
+  for(i in seq_along(tmp7[,1])[-1]) out2 <- c(out2, tmp7[i,])
+  predObs[which(aux$obs_type == 3)] <- out2 
   
   # observational likelihoods ----
   
