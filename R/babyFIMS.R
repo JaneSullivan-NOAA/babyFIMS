@@ -33,7 +33,7 @@ dat$waa <- input$waa
 dat$mature <- input$maturity
 # maybe obsType instead? not sure how this will all be indexed yet
 dat$fleetTypes <- unique(input$obsdf$fleet) 
-dat$srmode <- 1
+dat$srmode <- 0
 
 # prediction data frame
 dat$predObs <- get_pred(dat$aux)
@@ -61,7 +61,7 @@ calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
 f<-function(par){ # note dat isn't an argument in the fxn
   getAll(par, dat) # RTMB's attach
   obs <- OBS(obs) # access simulation, OSA residuals
-  
+  pred_Obs_vec <- rep(0, length(predObs[,1]))
   nobs <- length(obs) 
   nyear <- length(year)
   nage <- length(age)
@@ -83,29 +83,29 @@ f<-function(par){ # note dat isn't an argument in the fxn
   ssb <- rep(NA, nyear)
   for(y in 1:nyear) ssb[y] <- calc_ssb(exp(logN[y,]),Faa[y,],M[y,],waa,mature,spawnTimes)
   
-  predR <- rep(NA, nyear)
+  predlogR <- rep(0, nyear)
   for(y in 1:nyear){
     thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1]) 
     if(srmode==0){ #RW
       if (y == 1){
-        predR[y] <- logN[y,1] # need to fix this later
+        predlogR[y] <- logN[y,1] # need to fix this later
       }else{
-        predR[y] <- logN[y-1,1]
+        predlogR[y] <- logN[y-1,1]
       }
     }
     if(srmode==1){ #Ricker
-      predR[y] <- rickerpar[1]+log(thisSSB)-exp(rickerpar[2])*thisSSB
+      predlogR[y] <- rickerpar[1]+log(thisSSB)-exp(rickerpar[2])*thisSSB
     }
     if(srmode==2){ #BH
-      predR[y] <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
+      predlogR[y] <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
     }
     if(!(srmode%in%c(0,1,2))){
       stop(paste("srmode", srmode,"not implemented yet"))
     }      
-    jnll <- jnll - dnorm(logN[y,1],predR[y],sigR,log=TRUE)
+    jnll <- jnll - dnorm(logN[y,1],predlogR[y],sigR,log=TRUE)
   }  
   
-  predlogN <- matrix(NA, nrow=nyear, ncol=nage)
+  predlogN <- matrix(0, nrow=nyear, ncol=nage)
   for(y in 2:nyear){
     for(a in 2:nage){
       predlogN[y,a] <- logN[y-1,a-1]-Faa[y-1,a-1]-M[y-1,a-1]
@@ -155,10 +155,10 @@ f<-function(par){ # note dat isn't an argument in the fxn
   
   # combine and vectorize
   tmp3 <- rbind(tmp,tmp2)
-  out <- NULL
+  out <- tmp3[1,]
   
   # wow!
-  for(i in seq_along(tmp3[,1])) out <- c(out, tmp3[i,])
+  for(i in seq_along(tmp3[,1])[-1]) out <- c(out, tmp3[i,])
   predObs$pred[which(predObs$obs_type == 2)] <- out 
   
   # observation likelihoods
@@ -172,14 +172,15 @@ f<-function(par){ # note dat isn't an argument in the fxn
     
     # dnorm for catches, indices
     if(unique_nll_type==0) {
-      jnll <- jnll - dnorm(tmp$obs, tmp$pred, tmp$obserror, 1)
+      browser()
+      jnll <- jnll - RTMB::dnorm(tmp$obs, tmp$pred, tmp$obserror, 1)
     }
     # multinomial for comps
     if(unique_nll_type==1) {
       # for()
       # sum(tmp$pred)
       # sum(tmp$obs + 1e-10)
-      jnll <- jnll - dmultinom(tmp$obserror * tmp$obs, NULL, tmp$pred, 1)
+      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, NULL, tmp$pred, 1)
     }
   }
   
@@ -193,50 +194,50 @@ f<-function(par){ # note dat isn't an argument in the fxn
   #section to calculate population abundance
   
   
-  #section to calculate predicted values
-  dat_aux_pred 
-  
-  #section to calculate likelihoods
-  for(i in unique(dat$aux$likelihood_index)){
-    
-  }
-  
-  
-  for(y in 2:nrow){
-    for(a in 2:ncol){
-      pred <- logN[y-1,a-1]-F[y-1,a-1]-M[y-1,a-1]
-      if(a==ncol){
-        pred <- log(exp(pred)+exp(logN[y-1,a]-F[y-1,a]-M[y-1,a]))
-      }
-      jnll <- jnll - dnorm(logN[y,a],pred,sdS,log=TRUE)
-    }
-  }
-  logPred <- numeric(nobs)  
-  for(i in 1:nobs){
-    y <- aux[i,1]-minYear+1
-    f <- aux[i,2]
-    a <- aux[i,3]-minAge+1
-    Z <- F[y,a]+M[y,a]
-    if(fleetTypes[f]==0){
-      logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(F[y,a])
-    }
-    if(fleetTypes[f]==2){  
-      logPred[i] <- logQ[keyQ[f,a]]+logN[y,a]-Z*sampleTimes[f]
-    }
-    if(!(fleetTypes[f]%in%c(0,2))){  
-      stop("This fleet type is has not been implemented yet")
-    }
-  }
-  
-  REPORT(logPred)
-  logssb<-log(ssb)
-  ADREPORT(logssb)
+  # #section to calculate predicted values
+  # dat_aux_pred 
+  # 
+  # #section to calculate likelihoods
+  # for(i in unique(dat$aux$likelihood_index)){
+  #   
+  # }
+  # 
+  # 
+  # for(y in 2:nrow){
+  #   for(a in 2:ncol){
+  #     pred <- logN[y-1,a-1]-F[y-1,a-1]-M[y-1,a-1]
+  #     if(a==ncol){
+  #       pred <- log(exp(pred)+exp(logN[y-1,a]-F[y-1,a]-M[y-1,a]))
+  #     }
+  #     jnll <- jnll - dnorm(logN[y,a],pred,sdS,log=TRUE)
+  #   }
+  # }
+  # logPred <- numeric(nobs)  
+  # for(i in 1:nobs){
+  #   y <- aux[i,1]-minYear+1
+  #   f <- aux[i,2]
+  #   a <- aux[i,3]-minAge+1
+  #   Z <- F[y,a]+M[y,a]
+  #   if(fleetTypes[f]==0){
+  #     logPred[i] <- logN[y,a]-log(Z)+log(1-exp(-Z))+log(F[y,a])
+  #   }
+  #   if(fleetTypes[f]==2){  
+  #     logPred[i] <- logQ[keyQ[f,a]]+logN[y,a]-Z*sampleTimes[f]
+  #   }
+  #   if(!(fleetTypes[f]%in%c(0,2))){  
+  #     stop("This fleet type is has not been implemented yet")
+  #   }
+  # }
+  # 
+  # REPORT(logPred)
+  # logssb<-log(ssb)
+  # ADREPORT(logssb)
   jnll
 }    
 
 obj <- MakeADFun(f, par, 
                  #random=c("logN", "logF", "missing"), 
-                 map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), 
+                 #map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), 
                  silent=FALSE)
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
 opt$objective
