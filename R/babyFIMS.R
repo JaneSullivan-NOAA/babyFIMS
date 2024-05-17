@@ -3,6 +3,8 @@ library(dplyr)
 library(tidyr)
 
 load("data/am2022.RData")
+load("data/sizeage_matrix.RData")
+input$sizeage <- sizeage; rm(sizeage)
 source("R/helper.R")
 
 head(input$obsdf, 5) # long format with all observations
@@ -15,7 +17,7 @@ head(input$obsdf, 5) # long format with all observations
 # obserror # if nll_type obs error is an input (note this is Neff for dmultinom)
 
 #Remove length comps for now till we implement them
-input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
+# input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
 
 # data list ----
 dat <- list()
@@ -26,17 +28,18 @@ dat$aux <- get_likelihood_index(dat$aux)
 dat$year <- input$years
 dat$minYear <- min(dat$year)
 dat$age <-  input$ages
+dat$len <-  input$lens
 dat$minAge <- min(dat$age)
 dat$sampleTimes <- input$srv_frac
 dat$spawnTimes <- input$sp_frac
 dat$waa <- input$waa
 dat$mature <- input$maturity
-# maybe obsType instead? not sure how this will all be indexed yet
+dat$sizeage <- input$sizeage
 dat$fleetTypes <- unique(input$obsdf$fleet) 
 dat$srmode <- 0
 
 # prediction data frame
-dat$aux <- get_pred(dat$aux)
+dat$aux <- get_pred(dat$aux, input)
 
 # parameter ----
 par <- list()
@@ -160,6 +163,10 @@ f<-function(par){ # note dat isn't an argument in the fxn
   # wow!
   for(i in seq_along(tmp3[,1])[-1]) out <- c(out, tmp3[i,])
   predObs[which(aux$obs_type == 2)] <- out 
+  
+  # length comps ----
+  
+  
   
   # observational likelihoods ----
   
