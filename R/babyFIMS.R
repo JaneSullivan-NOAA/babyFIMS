@@ -167,16 +167,19 @@ f<-function(par){ # note dat isn't an argument in the fxn
     
     tmp <- predObs[which(predObs$likelihood_index==i), ] # drop retains matrix structure
     
+    unique_nll_type <- unique(tmp$nll_type)
+    if(length(unique_nll_type)>1) stop("multiple nll types within tmp")
+    
     # dnorm for catches, indices
-    if(tmp$nll_type==0) {
+    if(unique_nll_type==0) {
       jnll <- jnll - dnorm(tmp$obs, tmp$pred, tmp$obserror, 1)
     }
     # multinomial for comps
-    if(tmp$nll_type==1) {
+    if(unique_nll_type==1) {
       # for()
       # sum(tmp$pred)
       # sum(tmp$obs + 1e-10)
-      jnll <- jnll - dmultinom(sum(tmp$obserror * (tmp$obs + 1e-10)), sum(tmp$pred), 1)
+      jnll <- jnll - dmultinom(tmp$obserror * (tmp$obs + 1e-10), NULL, tmp$pred, 1)
     }
   }
   
