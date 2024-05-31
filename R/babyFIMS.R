@@ -217,7 +217,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
   for (i in unique(aux$likelihood_index[!is.na(aux$likelihood_index)])){
     
     tmp <- aux[which(aux$likelihood_index==i), ] 
-    tmppred <- as.numeric(predObs[which(aux$likelihood_index==i)])
+    tmppred <- predObs[which(aux$likelihood_index==i)]
     
     unique_nll_type <- unique(tmp$nll_type)
     if(length(unique_nll_type)>1) stop("multiple nll types within tmp")
@@ -225,17 +225,17 @@ f<-function(par){ # note dat isn't an argument in the fxn
     # dnorm for catches, indices
     if(unique_nll_type==0) {
       #browser()
-      jnll <- jnll - RTMB::dnorm(tmp$obs, tmppred, tmp$obserror, 1)
+      jnll <- jnll - RTMB::dnorm(10, tmppred, 0.5, log=TRUE)
     }
     # multinomial for comps
     if(unique_nll_type==1) {
-      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, NULL, tmppred, 1)
+      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, log=TRUE)
     }
   }
 
-  # REPORT(logPred)
-  # logssb<-log(ssb)
-  # ADREPORT(logssb)
+  REPORT(predObs)
+  logssb<-log(ssb)
+  ADREPORT(logssb)
   jnll
 }    
 
