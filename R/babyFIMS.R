@@ -241,13 +241,14 @@ f<-function(par){ # note dat isn't an argument in the fxn
 
 fill_vals <- function(x,vals){rep(as.factor(vals), length(x))}
 
-map <- par
-map$logsigR <- if(dat$logN_mode==0){fill_vals(map$logsigR, NA)}else{factor(1)}
-map$logsigN <- fill_vals(map$logsigN, NA)
-map$logQ <- fill_vals(map$logQ, NA)
-map$logM <- fill_vals(map$logM, NA)
-map$logfshslx <- fill_vals(map$logfshslx, NA)
-map$logsrvslx <- fill_vals(map$logsrvslx, NA)
+# map <- par
+map <- list()
+map$logsigR <- if(dat$logN_mode==0){fill_vals(par$logsigR, NA)}else{factor(1)}
+# ifmap$logsigN <- fill_vals(map$logsigN, NA)
+map$logQ <- fill_vals(par$logQ, NA)
+map$logM <- fill_vals(par$logM, NA)
+map$logfshslx <- fill_vals(par$logfshslx, NA)
+map$logsrvslx <- fill_vals(par$logsrvslx, NA)
 
 nyr <- length(dat$year)
 nage <- length(dat$age)
