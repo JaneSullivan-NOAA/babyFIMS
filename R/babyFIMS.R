@@ -50,7 +50,7 @@ dat$aux <- get_pred(dat$aux, input)
 # parameter ----
 par <- list()
 par$logsigR <- log(input$sigr)
-par$logsigN <- log(0.5)
+par$logsigN <- if(dat$logN_mode==2){log(0.5)}else{numeric(0)}
 par$logQ <- log(input$q)
 # is M a constant in FIMS or by year/age?
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
@@ -242,7 +242,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
 fill_vals <- function(x,vals){rep(as.factor(vals), length(x))}
 
 map <- par
-map$logsigR <- fill_vals(map$logsigR, NA)
+map$logsigR <- if(dat$logN_mode==0){fill_vals(map$logsigR, NA)}else{factor(1)}
 map$logsigN <- fill_vals(map$logsigN, NA)
 map$logQ <- fill_vals(map$logQ, NA)
 map$logM <- fill_vals(map$logM, NA)
