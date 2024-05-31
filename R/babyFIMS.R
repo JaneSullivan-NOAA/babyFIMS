@@ -1,7 +1,8 @@
-#RTMB 1.5 is not currently working for this example this code can install 1.3 from source
-#
-#packageurl <- "http://cran.r-project.org/src/contrib/Archive/RTMB/RTMB_1.3.tar.gz"
-#install.packages(packageurl, repos=NULL, type="source")
+# RTMB 1.5 is not currently working for this example. Issue is tmppred input to
+# dnorm in the observation likelihood for catch/index data. as.numeric() works
+# for RTMB <=1.4 but not 1.5. Use this code can install 1.3 from source:
+# packageurl <- "http://cran.r-project.org/src/contrib/Archive/RTMB/RTMB_1.3.tar.gz"
+# install.packages(packageurl, repos=NULL, type="source")
 
 library(RTMB)
 library(dplyr) 
@@ -13,7 +14,6 @@ input$sizeage <- sizeage; rm(sizeage)
 source("R/helper.R")
 
 head(input$obsdf, 5) # long format with all observations
-# found myself wanting a unique identifier for each data set... anyone else?
 # obs_type # 0=catch, 1=index, 2=agecom, 3=lencomp
 # nll_type # 0=dnorm, 1=dmultinom
 # fit_data # 1/0=TRUE/FALSE
@@ -41,8 +41,8 @@ dat$waa <- input$waa
 dat$mature <- input$maturity
 dat$sizeage <- input$sizeage
 dat$fleetTypes <- unique(input$obsdf$fleet) 
-dat$srmode <- 0
-dat$deterministic_NAA <- TRUE #Flag to set NAA to predNAA if not estimated
+dat$srmode <- 0 #
+dat$logN_mode <- 0 # 0 = deterministic SCAA, 1 = sigR est as fixef, logR as ranef, 2 = full state-space with/ shared sigN for a > 1 (same as n_NAA_sigma in WHAM)
 
 # prediction data frame
 dat$aux <- get_pred(dat$aux, input)
@@ -56,7 +56,7 @@ par$logQ <- log(input$q)
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
 par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
-par$logN <- matrix(10, nrow=length(dat$year), ncol=length(dat$age)) #Tim suggested initializing at 10 rather than zero
+par$logN <- matrix(10, nrow=length(dat$year), ncol=length(dat$age)) # Tim suggested initializing at 10 rather than zero
 par$logFmort <- matrix(0, nrow=length(dat$year), ncol=1)
 par$logfshslx <- log(input$fsh_slx) # need parametric selectivity
 par$logsrvslx <- log(input$fsh_slx)
@@ -108,8 +108,8 @@ f<-function(par){ # note dat isn't an argument in the fxn
     if(srmode==2){ #BH
       predlogR[y] <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
     }
-    if(!(srmode%in%c(0,1,2))){
-      stop(paste("srmode", srmode,"not implemented yet"))
+    if(!(srmode %in% c(0, 1, 2))){
+      stop(paste("srmode", srmode, "not implemented yet"))
     }      
     jnll <- jnll - dnorm(logN[y,1],predlogR[y],sigR,log=TRUE)
   }  
@@ -121,7 +121,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
       if(a==nage){
         predlogN[y,a] <- log(exp(predlogN[y,a])+exp(logN[y-1,a]-Faa[y-1,a]-M[y-1,a]))
       }
-      if(deterministic_NAA){
+      if(logN_mode == 0){ # deterministic SCAA
         logN[y,a] <- predlogN[y,a]
       }else{
         jnll <- jnll - dnorm(logN[y,a],predlogN[y,a],sigN,log=TRUE)
@@ -157,15 +157,12 @@ f<-function(par){ # note dat isn't an argument in the fxn
   tmp <- exp(logpredcatchatage)
   tmptot <- rowSums(tmp)
   tmp <- tmp/tmptot
-  # subsets out 1989 and 2022, because they are not in aux
-  tmp <- tmp[which(year %in% aux$year[which(aux$obs_type == 2 & aux$fleet == 1)]),]
-  
+
   # survey
   tmp2 <- exp(logpredindexatage)
   tmptot2 <- rowSums(tmp2)
   tmp2 <- tmp2/tmptot2
-  tmp2 <- tmp2[which(year %in% aux$year[which(aux$obs_type == 2 & aux$fleet == 2)]),]
-  
+
   # combine and vectorize
   tmp3 <- rbind(tmp,tmp2)
   out <- tmp3[1,]
@@ -179,8 +176,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
   tmp5 <- exp(logpredcatchatage)
   tmptot5 <- rowSums(tmp5)
   tmp5 <- tmp5/tmptot5
-  tmp5 <- tmp5[which(year %in% aux$year[which(aux$obs_type == 3 & aux$fleet == 1)]),]
-  
+
   predcatchatlength <- tmp5[,rep(1,length(sizeage[1,]))]
   
   # This is a matrix version of the elementwise loop below
@@ -199,8 +195,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
   tmp6 <- exp(logpredcatchatage)
   tmptot6 <- rowSums(tmp6)
   tmp6 <- tmp6/tmptot6
-  tmp6 <- tmp6[which(year %in% aux$year[which(aux$obs_type == 3 & aux$fleet == 2)]),]
-  
+
   predcatchatlength2 <- tmp6[,rep(1,length(sizeage[1,]))]
   
   for(i in seq_along(year)){
@@ -254,11 +249,19 @@ map$logM <- fill_vals(map$logM, NA)
 map$logfshslx <- fill_vals(map$logfshslx, NA)
 map$logsrvslx <- fill_vals(map$logsrvslx, NA)
 
+nyr <- length(dat$year)
+nage <- length(dat$age)
+tmp <- matrix(data = NA, ncol = nage, nrow = nyr)
+tmp[,1] <- 1:nyr
+tmp[1,2:nage] <- (nyr+1):(nyr+nage-1)
+map$logN <- as.factor(as.vector(tmp))
+
 obj <- MakeADFun(f, par, 
                  #random=c("logN", "logF", "missing"), 
                  #map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), 
                  #random=c("logN", "logFmort"),
                  map=map,
+                 random=NULL,
                  silent=FALSE)
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
 opt$objective

@@ -50,7 +50,7 @@ get_likelihood_index <- function(myaux) {
 # get prediction dataframe for observations (expanding to the full range of
 # observations)
 get_pred <- function(myaux, myinput) {
-  # myaux <- dat$aux
+  # myaux <- dat$aux; myinput <- input
   lkup <- myaux %>% dplyr::distinct(id, obs_type, nll_type, fleet)
   myaux <- myaux %>% dplyr::filter(year %in% myinput$year)
   
@@ -59,7 +59,7 @@ get_pred <- function(myaux, myinput) {
     myaux %>% 
       dplyr::filter(obs_type %in% c(0, 1)) %>% 
       dplyr::select(id, year, obs, obserror, age, len, likelihood_index) %>% 
-      tidyr::complete(id, year),
+      tidyr::complete(id, year = myinput$year),
     # age comp data
     myaux %>% 
       dplyr::filter(obs_type %in% c(2)) %>% 
