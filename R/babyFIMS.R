@@ -1,3 +1,8 @@
+#RTMB 1.5 is not currently working for this example this code can install 1.3 from source
+#
+#packageurl <- "http://cran.r-project.org/src/contrib/Archive/RTMB/RTMB_1.3.tar.gz"
+#install.packages(packageurl, repos=NULL, type="source")
+
 library(RTMB)
 library(dplyr) 
 library(tidyr)
@@ -37,6 +42,7 @@ dat$mature <- input$maturity
 dat$sizeage <- input$sizeage
 dat$fleetTypes <- unique(input$obsdf$fleet) 
 dat$srmode <- 0
+dat$deterministic_NAA <- TRUE #Flag to set NAA to predNAA if not estimated
 
 # prediction data frame
 dat$aux <- get_pred(dat$aux, input)
@@ -50,7 +56,7 @@ par$logQ <- log(input$q)
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
 par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
-par$logN <- matrix(0, nrow=length(dat$year), ncol=length(dat$age))
+par$logN <- matrix(10, nrow=length(dat$year), ncol=length(dat$age)) #Tim suggested initializing at 10 rather than zero
 par$logFmort <- matrix(0, nrow=length(dat$year), ncol=1)
 par$logfshslx <- log(input$fsh_slx) # need parametric selectivity
 par$logsrvslx <- log(input$fsh_slx)
@@ -115,7 +121,11 @@ f<-function(par){ # note dat isn't an argument in the fxn
       if(a==nage){
         predlogN[y,a] <- log(exp(predlogN[y,a])+exp(logN[y-1,a]-Faa[y-1,a]-M[y-1,a]))
       }
-      jnll <- jnll - dnorm(logN[y,a],predlogN[y,a],sigN,log=TRUE)
+      if(deterministic_NAA){
+        logN[y,a] <- predlogN[y,a]
+      }else{
+        jnll <- jnll - dnorm(logN[y,a],predlogN[y,a],sigN,log=TRUE)
+      }
     }
   }
 
