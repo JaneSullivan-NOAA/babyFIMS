@@ -1,12 +1,7 @@
-# RTMB 1.5 is not currently working for this example. Issue is tmppred input to
-# dnorm in the observation likelihood for catch/index data. as.numeric() works
-# for RTMB <=1.4 but not 1.5. Use this code can install 1.3 from source:
-# packageurl <- "http://cran.r-project.org/src/contrib/Archive/RTMB/RTMB_1.3.tar.gz"
-# install.packages(packageurl, repos=NULL, type="source")
-
 library(RTMB)
 library(dplyr) 
 library(tidyr)
+library(ggplot2)
 
 load("data/am2022.RData")
 load("data/sizeage_matrix.RData")
@@ -22,7 +17,7 @@ head(input$obsdf, 5) # long format with all observations
 # obserror # if nll_type obs error is an input (note this is Neff for dmultinom)
 
 #Remove length comps for now till we implement them
-# input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
+input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
 
 # data list ----
 dat <- list()
@@ -63,7 +58,7 @@ par$logsrvslx <- log(input$fsh_slx)
 
 # assumes vectors at age are supplied to function for N, F, M, W, and mature
 calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
-  sum(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)
+  sum(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)/1e6
 }
 
 # model ----
@@ -83,29 +78,28 @@ f<-function(par){ # note dat isn't an argument in the fxn
   fshslx <- exp(logfshslx)
   srvslx <- exp(logsrvslx)
   Faa <- matrix(data = 1, nrow = nyear, ncol = nage) 
-  
-  jnll <- 0
-  
-  #section to calculate population abundance
   for(y in 1:nyear) Faa[y,] = Fmort[y,] * fshslx 
   Z <- Faa+M
+  
+  jnll <- 0
+
+  # Recruitment ----
   ssb <- rep(0, nyear)
   for(y in 1:nyear) ssb[y] <- calc_ssb(exp(logN[y,]),Faa[y,],M[y,],waa,mature,spawnTimes)
-  
   predlogR <- rep(0, nyear)
   for(y in 1:nyear){
     thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1]) 
-    if(srmode==0){ #RW
+    if(srmode==0){ # RW
       if (y == 1){
         predlogR[y] <- logN[y,1] # need to fix this later
       }else{
         predlogR[y] <- logN[y-1,1]
       }
     }
-    if(srmode==1){ #Ricker
+    if(srmode==1){ # Ricker
       predlogR[y] <- rickerpar[1]+log(thisSSB)-exp(rickerpar[2])*thisSSB
     }
-    if(srmode==2){ #BH
+    if(srmode==2){ # BH
       predlogR[y] <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
     }
     if(!(srmode %in% c(0, 1, 2))){
@@ -114,6 +108,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
     jnll <- jnll - dnorm(logN[y,1],predlogR[y],sigR,log=TRUE)
   }  
   
+  # N matrix
   predlogN <- matrix(0, nrow=nyear, ncol=nage)
   for(y in 2:nyear){
     for(a in 2:nage){
@@ -225,11 +220,11 @@ f<-function(par){ # note dat isn't an argument in the fxn
     # dnorm for catches, indices
     if(unique_nll_type==0) {
       #browser()
-      jnll <- jnll - RTMB::dnorm(10, tmppred, 0.5, log=TRUE)
+      jnll <- jnll - dnorm(tmp$obs, tmppred, tmp$obserror, log=TRUE)
     }
     # multinomial for comps
     if(unique_nll_type==1) {
-      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, log=TRUE)
+      jnll <- jnll - dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, log=TRUE)
     }
   }
 
@@ -240,12 +235,9 @@ f<-function(par){ # note dat isn't an argument in the fxn
 }    
 
 fill_vals <- function(x,vals){rep(as.factor(vals), length(x))}
-
-# map <- par
 map <- list()
 map$logsigR <- if(dat$logN_mode==0){fill_vals(par$logsigR, NA)}else{factor(1)}
-# ifmap$logsigN <- fill_vals(map$logsigN, NA)
-map$logQ <- fill_vals(par$logQ, NA)
+# map$logQ <- fill_vals(par$logQ, NA)
 map$logM <- fill_vals(par$logM, NA)
 map$logfshslx <- fill_vals(par$logfshslx, NA)
 map$logsrvslx <- fill_vals(par$logsrvslx, NA)
@@ -258,9 +250,6 @@ tmp[1,2:nage] <- (nyr+1):(nyr+nage-1)
 map$logN <- as.factor(as.vector(tmp))
 
 obj <- MakeADFun(f, par, 
-                 #random=c("logN", "logF", "missing"), 
-                 #map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), 
-                 #random=c("logN", "logFmort"),
                  map=map,
                  random=NULL,
                  silent=FALSE)
@@ -268,8 +257,22 @@ opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000
 opt$objective
 
 sdr <- sdreport(obj)
+sdr
 plr <- as.list(sdr,report=TRUE, "Est")
 plrsd <- as.list(sdr,report=TRUE, "Std")
-lines(dat$year, exp(plr$logssb), lwd=3, col="darkred")
-lines(dat$year, exp(plr$logssb-2*plrsd$logssb), lwd=3, col="darkred", lty="dotted")
-lines(dat$year, exp(plr$logssb+2*plrsd$logssb), lwd=3, col="darkred", lty="dotted")
+load('data/orig_am2022.Rdata')
+# names(arep)
+
+ssb <- as.data.frame(arep$SSB)
+names(ssb) <- c('year', 'ssb', 'ssb_sd', 'ssb_lci', 'ssb_uci')
+ssb <- ssb %>% 
+  mutate(version = 'amak') %>% 
+  bind_rows(data.frame(year = dat$year,
+               ssb = exp(plr$logssb),
+               ssb_uci = exp(plr$logssb+2*plrsd$logssb),
+               ssb_lci = exp(plr$logssb-2*plrsd$logssb),
+               version = 'babyFIMS'))
+
+ggplot(ssb %>% filter(year >= 1978), aes(year, log(ssb), col = version)) +
+  geom_point() +
+  geom_line()
