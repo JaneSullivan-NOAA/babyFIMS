@@ -37,7 +37,7 @@ dat$mature <- input$maturity
 dat$sizeage <- input$sizeage
 dat$fleetTypes <- unique(input$obsdf$fleet) 
 dat$srmode <- 0 #
-dat$logN_mode <- 0 # 0 = deterministic SCAA, 1 = sigR est as fixef, logR as ranef, 2 = full state-space with/ shared sigN for a > 1 (same as n_NAA_sigma in WHAM)
+dat$logN_mode <- 0 # 0 = deterministic SCAA, 1 = sigR estimated, logR estimated as ranef, 2 = full state-space with/ shared sigN for a > 1 (same as n_NAA_sigma in WHAM)
 
 # prediction data frame
 dat$aux <- get_pred(dat$aux, input)
@@ -46,7 +46,7 @@ dat$aux <- get_pred(dat$aux, input)
 par <- list()
 par$logsigR <- log(input$sigr)
 par$logsigN <- if(dat$logN_mode==2){log(0.5)}else{numeric(0)}
-par$logQ <- 0#log(input$q)
+par$logQ <- 0
 # is M a constant in FIMS or by year/age?
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
@@ -54,8 +54,6 @@ par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
 par$logN <- matrix(10, nrow=length(dat$year), ncol=length(dat$age)) # Tim suggested initializing at 10 rather than zero
 par$logFmort <- matrix(0, nrow=length(dat$year), ncol=1)
 par$logfshslx <- log(input$fsh_slx) # need parametric selectivity
-#exp(par$logfshslx) # need parametric selectivity
-#exp(par$logsrvslx) # need parametric selectivity
 par$logsrvslx <- log(input$srv_slx)
 
 # assumes vectors at age are supplied to function for N, F, M, W, and mature
@@ -114,11 +112,12 @@ f<-function(par){ # note dat isn't an argument in the fxn
   predlogN <- matrix(0, nrow=nyear, ncol=nage)
   for(y in 2:nyear){
     for(a in 2:nage){
+      # full state-space model 
       predlogN[y,a] <- logN[y-1,a-1]-Faa[y-1,a-1]-M[y-1,a-1]
       if(a==nage){
         predlogN[y,a] <- log(exp(predlogN[y,a])+exp(logN[y-1,a]-Faa[y-1,a]-M[y-1,a]))
       }
-      if(logN_mode == 0){ # deterministic SCAA
+      if(logN_mode == 0){ # fixed or random effects recruitment with deterministic N matrix
         logN[y,a] <- predlogN[y,a]
       }else{
         jnll <- jnll - dnorm(logN[y,a],predlogN[y,a],sigN,log=TRUE)
@@ -133,7 +132,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
   # need to modify this to allow for multiple fleets
   logpredcatchatage <- logN-log(Z)+log(1-exp(-Z))+log(Faa)
 
-  # obs_type 0 is aggregate catch in weight (need to figure out units)
+  # obs_type 0 is aggregate catch in weight (need to figure out how we want to input units)
   for (i in which(aux$obs_type == 0)){
     y <- which(year == aux$year[i])
     predObs[i] <- log(sum(exp(logpredcatchatage[y,]) * waa)/1e6) # waa in g and aggregate catch in t
@@ -222,11 +221,11 @@ f<-function(par){ # note dat isn't an argument in the fxn
     # dnorm for catches, indices
     if(unique_nll_type==0) {
       #browser()
-      jnll <- jnll - dnorm(tmp$obs, tmppred, tmp$obserror, log=TRUE)
+      jnll <- jnll - RTMB::dnorm(tmp$obs, tmppred, tmp$obserror, log=TRUE)
     }
     # multinomial for comps
     if(unique_nll_type==1) {
-      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, log=TRUE)
+      jnll <- jnll - RTMB::dmultinom(x=tmp$obserror * tmp$obs, size=sum(tmp$obserror * tmp$obs), prob=tmppred, log=TRUE)
     }
   }
 
@@ -268,7 +267,6 @@ sdr
 plr <- as.list(sdr,report=TRUE, "Est")
 plrsd <- as.list(sdr,report=TRUE, "Std")
 load('data/orig_am2022.Rdata')
-# names(arep)
 
 Rec <- as.data.frame(arep$R)
 names(Rec) <- c('year', 'R', 'Rec_sd', 'Rec_lci', 'Rec_uci')
