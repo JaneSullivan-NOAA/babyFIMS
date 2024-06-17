@@ -46,7 +46,7 @@ dat$aux <- get_pred(dat$aux, input)
 par <- list()
 par$logsigR <- log(input$sigr)
 par$logsigN <- if(dat$logN_mode==2){log(0.5)}else{numeric(0)}
-par$logQ <- log(input$q)
+par$logQ <- 0#log(input$q)
 # is M a constant in FIMS or by year/age?
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
@@ -54,11 +54,13 @@ par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
 par$logN <- matrix(10, nrow=length(dat$year), ncol=length(dat$age)) # Tim suggested initializing at 10 rather than zero
 par$logFmort <- matrix(0, nrow=length(dat$year), ncol=1)
 par$logfshslx <- log(input$fsh_slx) # need parametric selectivity
-par$logsrvslx <- log(input$fsh_slx)
+#exp(par$logfshslx) # need parametric selectivity
+#exp(par$logsrvslx) # need parametric selectivity
+par$logsrvslx <- log(input$srv_slx)
 
 # assumes vectors at age are supplied to function for N, F, M, W, and mature
 calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
-  sum(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)/1e6
+  sum(Naa*exp((-Faa-M)*spawnTimes)*mature*waa)/1e3
 }
 
 # model ----
@@ -229,6 +231,8 @@ f<-function(par){ # note dat isn't an argument in the fxn
   }
 
   REPORT(predObs)
+  
+  ADREPORT(predlogR)
   logssb<-log(ssb)
   ADREPORT(logssb)
   jnll
@@ -256,12 +260,29 @@ obj <- MakeADFun(f, par,
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
 opt$objective
 
+names(opt$par)
+opt$par
+
 sdr <- sdreport(obj)
 sdr
 plr <- as.list(sdr,report=TRUE, "Est")
 plrsd <- as.list(sdr,report=TRUE, "Std")
 load('data/orig_am2022.Rdata')
 # names(arep)
+
+Rec <- as.data.frame(arep$R)
+names(Rec) <- c('year', 'R', 'Rec_sd', 'Rec_lci', 'Rec_uci')
+Rec <- Rec %>%  mutate(version = 'amak') %>% 
+  bind_rows(data.frame(year = dat$year,
+               R = exp(plr$predlogR)/1e6,
+               Rec_uci = exp(plr$predlogR+2*plrsd$predlogR),
+               Rec_lci = exp(plr$predlogR-2*plrsd$predlogR),
+               version = 'babyFIMS'))
+#View(Rec)
+ggplot(Rec %>% filter(year >= 1978), aes(year, (R), col = version)) +
+  geom_point() +
+  geom_line() + ylim(0,NA) + ggthemes::theme_few()
+
 
 ssb <- as.data.frame(arep$SSB)
 names(ssb) <- c('year', 'ssb', 'ssb_sd', 'ssb_lci', 'ssb_uci')
@@ -273,6 +294,8 @@ ssb <- ssb %>%
                ssb_lci = exp(plr$logssb-2*plrsd$logssb),
                version = 'babyFIMS'))
 
-ggplot(ssb %>% filter(year >= 1978), aes(year, log(ssb), col = version)) +
+ggplot(ssb %>% filter(year >= 1978), aes(year, (ssb), col = version)) +
   geom_point() +
-  geom_line()
+  geom_line() + ylim(0,NA) + ggthemes::theme_few()
+
+
