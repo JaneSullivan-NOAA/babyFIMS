@@ -224,7 +224,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
     }
     # multinomial for comps
     if(unique_nll_type==1) {
-      jnll <- jnll - dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, log=TRUE)
+      jnll <- jnll - RTMB::dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, log=TRUE)
     }
   }
 
