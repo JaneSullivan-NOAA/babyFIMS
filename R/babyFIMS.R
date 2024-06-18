@@ -296,4 +296,21 @@ ggplot(ssb %>% filter(year >= 1978), aes(year, (ssb), col = version)) +
   geom_point() +
   geom_line() + ylim(0,NA) + ggthemes::theme_few()
 
+################
+#tjm
+################
 
+obj$report() #doesn't work for me
+
+source("R/obj_fn.R") #an edited version of f using a hand coded dmultinom, and some adjustment to the nll penalty for recruitment
+obj_fn(par)
+
+other_obj <- MakeADFun(obj_fn, par, 
+                 map=map,
+                 random=NULL,
+                 silent=FALSE)
+
+other_obj$report() #works
+other_opt <- nlminb(other_obj$par, other_obj$fn, other_obj$gr, control=list(eval.max=1000, iter.max=1000))
+other$opt$obj - opt$obj # same
+other_sdr <- sdreport(other_obj)
