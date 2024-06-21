@@ -1,6 +1,8 @@
-#length/age model process
+#length/age model process test
 
-#Generic growth data to create length at age 
+#Generic growth data to create length at age this could be replaced
+#by empirical length at age in practice if available but provides 
+#an easy way to parameterize a generic example population
 max_age <- 15
 Linf <- 100
 K <- .3
@@ -27,21 +29,21 @@ rec_props <- rec_props/sum(rec_props)
 ages <- comp_ages
 n_ages <- length(ages)
 #Function to get expected length at age from growth params
-AtoL <- function(a,Linf,K){
-  L <- Linf*(1-exp(-K*a))+0.001
+AtoL <- function(a_f,Linf_f,K_f){
+  L <- Linf_f*(1-exp(-K_f*a_f))+0.001
 }
 
 #Function to get expected weight at length from growth params
-LtoW <- function(L,alpha,beta){
-  W <- alpha*L^beta
+LtoW <- function(L_f,alpha_f,beta_f){
+  W <- alpha_f*L_f^beta_f
 }
 
-logistic_mature <- function(x, inflection_point, slope){
-  prop <- 1 / (1 + exp(-1 * slope * (x - inflection_point)))
+logistic_mature <- function(x_f, inflection_point_f, slope_f){
+  prop <- 1 / (1 + exp(-1 * slope_f * (x_f - inflection_point_f)))
 }
 
-get_recruit <- function(ssb,rzero,steep,phi_0){
-  recruits <- (0.8*rzero*steep*ssb)/(0.2*phi_0*rzero*(1.0-steep)+ssb*(steep-0.2))
+get_recruit <- function(ssb_f,rzero_f,steep_f,phi_0_f){
+  recruits <- (0.8*rzero_f*steep_f*ssb_f)/(0.2*phi_0_f*rzero_f*(1.0-steep_f)+ssb_f*(steep_f-0.2))
 }
 #Vector of model years 
 start_year <- 1
@@ -75,10 +77,10 @@ lengths_x_ages <- AtoL(ages_x_lengths,
                        rep(K,length(ages_x_lengths))
                        )*rep(length_props,length(ages))
 
-length <- rep(lengths_x_ages,n_years)
+len <- rep(lengths_x_ages,n_years)
 
 #For this example I'm setting the weights as fixed weight at length
-weight_x_length <- LtoW(length,
+weight_x_length <- LtoW(len,
                        rep(alpha,length(length)),
                        rep(beta,length(length)))
 
@@ -94,7 +96,7 @@ prop_female <- rep(0.5,n_years*n_ages*n_growth_morphs)
 age_50_mat <- 6
 slope <- 2
 mature_x_age<-logistic_mature(ages,age_50_mat,slope)
-prop_Mature <- rep(sort(rep(mature_x_age,n_growth_morphs)),n_years)
+prop_mature <- rep(sort(rep(mature_x_age,n_growth_morphs)),n_years)
 
 #Data frame to hold abundance data specific to year, age, and length this could 
 #probably just be a vector of abundance if the indexes are used.
@@ -107,8 +109,10 @@ prop_Mature <- rep(sort(rep(mature_x_age,n_growth_morphs)),n_years)
 abundance <- rep(0,n_years*n_ages*n_growth_morphs)
 unfished_abundance <- rep(0,n_years*n_ages*n_growth_morphs)
 
-init_NAAL <- rep(0,n_years*n_ages*n_growth_morphs)
-init_unfished_NAAL <- rep(0,n_years*n_ages*n_growth_morphs)
+init_NAAL <- rep(0,n_ages*n_growth_morphs)
+init_unfished_NAAL <- rep(0,n_ages*n_growth_morphs)
+init_age <- ages_x_lengths
+init_length <- lengths_x_ages
 #Initialize ssb
 ssb <- rep(NA,n_years)
 unfished_ssb <- rep(NA,n_years)
@@ -172,7 +176,7 @@ if(n_surveys>0){
 fleet <- sort(rep(fleets,n_years*n_ages*n_growth_morphs))
 fleet_year <- rep(year,n_fleets)
 fleet_age <- rep(age,n_fleets)
-fleet_length <- rep(length,n_fleets)
+fleet_length <- rep(len,n_fleets)
 
 fish_mort <- rep(0,n_years*n_fleets*n_ages*n_growth_morphs)
 
@@ -183,35 +187,33 @@ catch_abun <- rep(0,n_years*n_fleets*n_ages*n_growth_morphs)
 survey <- sort(rep(surveys,n_years*n_ages*n_growth_morphs))
 survey_year <- rep(year,n_surveys)
 survey_age <- rep(age,n_surveys)
-survey_length <- rep(length,n_surveys)
+survey_length <- rep(len,n_surveys)
 
 survey_q <- rep(0,n_years*n_surveys*n_ages*n_growth_morphs)
 
 survey_abun <- rep(0,n_years*n_surveys*n_ages*n_growth_morphs)
 
-
-
-for(i in seq_along(Growth_transition[,1]))
+for(i in seq_along(transition_proportion))
 {
   sink <- growth_sink[i]
   source <- growth_source[i]
   trans_prop <- transition_proportion[i]
-  catch_sink <- which(catch_year==year[sink] &
-                      catch_age==age[sink] &
-                      catch_length==length[sink])
-  catch_source <- which(catch_year==year[source] &
-                        catch_age==age[source] &
-                        catch_length==length[source])
+  fleet_sink <- which(fleet_year==year[sink] &
+                      fleet_age==age[sink] &
+                      fleet_length==len[sink])
+  fleet_source <- which(fleet_year==year[source] &
+                        fleet_age==age[source] &
+                        fleet_length==len[source])
   survey_sink <- which(survey_year==year[sink] &
                        survey_age==age[sink] &
-                       survey_length==length[sink])
+                       survey_length==len[sink])
   survey_source <- which(survey_year==year[source] &
                          survey_age==age[source] &
-                         survey_length==length[source])
+                         survey_length==len[source])
   
   if(year[sink]==start_year){
-    abundance[sink] <- init_NAAL[which(init_age==age[sink] & init_length==length[sink])]
-    unfished_abundance[sink] <- init_unfished_NAAL[which(init_age==age[sink] & init_length==length[sink])]
+    abundance[sink] <- init_NAAL[which(init_age==age[sink] & init_length==len[sink])]
+    unfished_abundance[sink] <- init_unfished_NAAL[which(init_age==age[sink] & init_length==len[sink])]
   }else if(age[sink]==0){
     if(is.na(ssb[which(years==year[sink])])){
       ssb[which(years==year[sink])] <- sum(abundance[which(year==year[sink])]*
@@ -224,48 +226,59 @@ for(i in seq_along(Growth_transition[,1]))
                                                     prop_mature[which(year==year[sink])]*
                                                     prop_female[which(year==year[sink])])
     }
-    abundance[sink] <- get_recruit[ssb[which(years==year[sink])],rzero,steep,unfished_ssb[1]/rzero]
-    unfished_abundance[sink] <- get_recruit[unfished_ssb[which(years==year[sink])],rzero,steep,unfished_ssb[1]/rzero]
+    abundance[sink] <- get_recruit(ssb[which(years==year[sink])],rzero,steep,(unfished_ssb[1]/rzero))
+    unfished_abundance[sink] <- get_recruit(unfished_ssb[which(years==year[sink])],rzero,steep,unfished_ssb[1]/rzero)
   }else if(age[sink]==max_age){
     
-    total_mort[sink] <- sum(nat_mort[sink],fish_mort[catch_sink])
+    total_mort[sink] <- sum(nat_mort[sink],fish_mort[fleet_sink])
     
-    catch[catch_sink]<-catch[catch_sink] + (fish_mort[catch_sink]/total_mort[sink])*abundance[sink]*(1-exp(-total_mort[sink]))
+    catch_abun[fleet_sink]<-catch_abun[fleet_sink] + (fish_mort[fleet_sink]/total_mort[sink])*abundance[sink]*(1-exp(-total_mort[sink]))
     
-    survey_intercept[survey_sink]<-survey_intercept[survey_sink] + abundance[sink]*(1-exp(-survey_obs_frac[survey_sink])) 
+    survey_abun[survey_sink]<-survey_abun[survey_sink] + survey_q[survey_sink]*abundance[sink]*(1-exp(-total_mort[sink])) 
     
     abundance[sink] <- abundance[sink]*exp(-total_mort[sink])
     
-    total_mort[source] <- sum(nat_mort[source],fish_mort[catch_source])
+    total_mort[source] <- sum(nat_mort[source],fish_mort[fleet_source])
     
     abundance[sink] <- abundance[sink] + trans_prop*abundance[source]*exp(-total_mort[source])
 
-    catch[which(catch_year==year[sink] &
-                  catch_age==age[sink] &
-                  catch_length==length[sink])]<-catch[which(catch_year==year[sink] &
-                                                                          catch_age==age[sink] &
-                                                                          catch_length==length[sink])] + (fish_mort[which(catch_year==year[source] &
-                                                                                                                                        catch_age==age[source] &
-                                                                                                                                        catch_length==length[source])]/total_mort[source])*trans_prop*abundance[source]*(1-exp(-total_mort[source])) 
+    catch_abun[fleet_sink]<-catch_abun[fleet_sink] + (fish_mort[fleet_source]/total_mort[fleet_source])*trans_prop*abundance[source]*(1-exp(-total_mort[source])) 
+    
+    survey_abun[survey_sink]<-survey_abun[survey_sink] + survey_q[survey_source]*trans_prop*abundance[source]*(1-exp(-total_mort[source])) 
     
   }else{
-    total_mort[source] <- sum(nat_mort[source],fish_mort[which(catch_year==year[source] &
-                                                                     catch_age==age[source] &
-                                                                     catch_length==length[source])])
+    total_mort[source] <- sum(nat_mort[source],fish_mort[fleet_source])
     
     abundance[sink] <- trans_prop*abundance[source]*exp(-total_mort[source])
     
-    catch[which(catch_year==year[sink] &
-                  catch_age==age[sink] &
-                  catch_length==length[sink])]<-catch[which(catch_year==year[sink] &
-                                                                          catch_age==age[sink] &
-                                                                          catch_length==length[sink])] + (fish_mort[which(catch_year==year[source] &
-                                                                                                                                      catch_age==age[source] &
-                                                                                                                                      catch_length==length[source])]/total_mort[source])*trans_prop*abundance[source]*(1-exp(-total_mort[source]))    
+    catch_abun[fleet_sink]<-catch_abun[fleet_sink] + (fish_mort[fleet_sink]/total_mort[source])*trans_prop*abundance[source]*(1-exp(-total_mort[source]))    
+    
+    survey_abun[survey_sink]<-survey_abun[survey_sink] + survey_q[survey_source]*trans_prop*abundance[source]*(1-exp(-total_mort[source])) 
   }
 }
 
+#Here we calculate interpolated relative abundance at length 
+#param len #is the length that relative abundance is being calculated for
+#param year #is the time at which this is being calculated (fixed at whole years for now)
+#param pop_val_id #is a vector of values identifying the row id of model estimates
+#                  to include in the interpolation
 
+pop_val_id <- matrix
+for(i in comp_lengths){
+  
+}
+
+interp_length_comp <- function(comp_length,pop_val_id){
+  relative_abundance <- 0
+  for(i in unique(age[pop_val_id])){
+    temp_id <- pop_val_id[which(age[pop_val_id])==i]
+    sub_len <- len[temp_id]
+    sub_abun <- abundance[temp_id]
+    temp_abun <- sub_abun[1]+(comp_length-sub_len[1])*(sub_abun[2]-sub_abun[1])/(sub_len[2]-sub_len[1])
+    relative_abundance <- relative_abundance + temp_abun
+  }
+  return(relative_abundance)
+}
 
 #TODO: Still need to write up logic for interpolating between abundance values
 #to calculate length comps.

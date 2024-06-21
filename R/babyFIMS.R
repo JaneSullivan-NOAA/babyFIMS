@@ -2,6 +2,7 @@ library(RTMB)
 library(dplyr) 
 library(tidyr)
 library(ggplot2)
+library(ggthemes)
 
 load("data/am2022.RData")
 load("data/sizeage_matrix.RData")
