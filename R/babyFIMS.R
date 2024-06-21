@@ -3,11 +3,13 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(ggthemes)
+compiler::enableJIT(0)
 
 load("data/am2022.RData")
 load("data/sizeage_matrix.RData")
 input$sizeage <- sizeage; rm(sizeage)
 source("R/helper.R")
+source("R/obj_fn.R")
 
 head(input$obsdf, 5) # long format with all observations
 # obs_type # 0=catch, 1=index, 2=agecom, 3=lencomp
@@ -226,7 +228,7 @@ f<-function(par){ # note dat isn't an argument in the fxn
     }
     # multinomial for comps
     if(unique_nll_type==1) {
-      jnll <- jnll - RTMB::dmultinom(x=tmp$obserror * tmp$obs, size=sum(tmp$obserror * tmp$obs), prob=tmppred, log=TRUE)
+      jnll <- jnll - baby_dmultinom(tmp$obserror * tmp$obs, sum(tmp$obserror * tmp$obs), tmppred, dolog=TRUE)
     }
   }
 
@@ -259,7 +261,7 @@ obj <- MakeADFun(f, par,
                  silent=FALSE)
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
 opt$objective
-
+obj$report()
 names(opt$par)
 opt$par
 
