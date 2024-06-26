@@ -29,8 +29,8 @@ rec_props <- rec_props/sum(rec_props)
 ages <- comp_ages
 n_ages <- length(ages)
 #Function to get expected length at age from growth params
-AtoL <- function(a_f,Linf_f,K_f){
-  L <- Linf_f*(1-exp(-K_f*a_f))+0.001
+AtoL <- function(a_f,Linf_f,K_f,a_0){
+  L <- Linf_f*(1-exp(-K_f*(a_f-a_0)))+0.001
 }
 
 #Function to get expected weight at length from growth params
@@ -74,7 +74,8 @@ age <- rep(ages_x_lengths,n_years)
 #assuming a normal distribution.
 lengths_x_ages <- AtoL(ages_x_lengths,
                        rep(Linf,length(ages_x_lengths)),
-                       rep(K,length(ages_x_lengths))
+                       rep(K,length(ages_x_lengths)),
+                       rep(a0,length(ages_x_lengths))
                        )*rep(length_props,length(ages))
 
 len <- rep(lengths_x_ages,n_years)
@@ -263,9 +264,82 @@ for(i in seq_along(transition_proportion))
 #param pop_val_id #is a vector of values identifying the row id of model estimates
 #                  to include in the interpolation
 
-pop_val_id <- matrix
-for(i in comp_lengths){
+comp_lengths
+ages
+
+#Need to add fleets to this.
+length_comp_year <- sort(rep(years,(length(ages)*length(comp_lengths))))
+length_comp_age <- rep(sort(rep(ages,length(comp_lengths))),length(years))
+length_comp_length <- (rep(comp_lengths,length(ages)*length(years)))
+
+
+length_comp_lower_interp <- rep(NA,length(length_comp_length))
+length_comp_upper_interp <- rep(NA,length(length_comp_length))
+length_comp_abund <- rep(NA,length(length_comp_length))
+
+temp_abun_per_rec<-NULL
+temp_comp_lower_interp<-rep(NA,length(comp_lengths))
+temp_comp_upper_interp<-rep(NA,length(comp_lengths))
+comp_lower_interp <- NULL
+comp_upper_interp <- NULL
+for(i in seq_along(ages)){
   
+  mean_length <- AtoL(ages[i],Linf,K,a0)
+  
+  temp_len_probs<-pnorm(q=comp_lengths,mean=mean_length,sd=mean_length*cv)
+  temp_len_probs[1]<-0
+  temp_len_probs<- c(temp_len_probs[-1],1)-temp_len_probs
+  
+  temp_abun_per_rec <- c(temp_abun_per_rec,temp_len_probs)
+  
+  pop_lengths <- mean_length*length_props
+  
+  temp_comp_lower_interp[comp_lengths<pop_lengths[1]] <- 0
+  temp_comp_upper_interp[comp_lengths<pop_lengths[1]] <- 1
+  for(j in seq_along(pop_lengths)[-1]){
+    temp_comp_lower_interp[comp_lengths<pop_lengths[j] &
+                             comp_lengths>=pop_lengths[j-1] ] <- j-1
+    
+    temp_comp_upper_interp[comp_lengths<pop_lengths[j] &
+                             comp_lengths>=pop_lengths[j-1] ] <- j
+  }
+  temp_comp_lower_interp[comp_lengths>=pop_lengths[length(pop_lengths)]] <- length(pop_lengths)
+  temp_comp_upper_interp[comp_lengths>=pop_lengths[length(pop_lengths)]] <- length(pop_lengths)+1
+
+  comp_lower_interp <- c(comp_lower_interp,temp_comp_lower_interp)
+  comp_upper_interp <- c(comp_upper_interp,temp_comp_upper_interp)
+}
+length_comp_no_mort_abund_per_rec <- rep(temp_abun_per_rec,length(years))
+length_comp_lower_interp <- rep(comp_lower_interp,length(years))
+length_comp_upper_interp <- rep(comp_upper_interp,length(years))
+length_comp_prop_upper <- (length_comp_length-length_comp_lower_interp)/
+                          (length_comp_upper_interp-length_comp_lower_interp)
+
+for(i in seq_along(length_comp_year)){
+  length_comp_abund[i] <- recruitment(year,age)*
+                          length_comp_no_mort_abund_per_rec[i]*(
+                            
+                          (1-length_comp_prop_upper[i])*catch_abun[year==length_comp_year[i] &
+                                     age==length_comp_age[i] &
+                                     len==length_comp_lower_interp[i]]
+                          +
+                          length_comp_prop_upper[i]*catch_abun[year==length_comp_year[i] &
+                                       age==length_comp_age[i] &
+                                       len==length_comp_upper_interp[i]]
+                          )
+}
+
+pop_val_id <- matrix(data=NA,nrow=length(length_comp_length_vec),ncol=2)
+for(i in comp_lengths){
+  pop_val_id[i,1] <- min(len[len>=length_comp_length_vec[i] &
+                             age==length_comp_age_vec[i]    &
+                             year==length_comp_year]) 
+  pop_val_id[i,2] <- max(len[len<=length_comp_length_vec[i] &
+                               age==length_comp_age_vec[i]])
+  pop_val_id[i,3] <- min(len[len>=length_comp_length_vec[i] &
+                               age==length_comp_age_vec[i]]) 
+  pop_val_id[i,4] <- max(len[len<=length_comp_length_vec[i] &
+                               age==length_comp_age_vec[i]])
 }
 
 interp_length_comp <- function(comp_length,pop_val_id){
