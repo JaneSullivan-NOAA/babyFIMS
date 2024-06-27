@@ -267,7 +267,8 @@ for(i in seq_along(transition_proportion))
 comp_lengths
 ages
 
-#Need to add fleets to this.
+#Need to add fleets to this. Should set up so that there can be fleet specific
+#comp bins. Just start with single population comps for now though.
 length_comp_year <- sort(rep(years,(length(ages)*length(comp_lengths))))
 length_comp_age <- rep(sort(rep(ages,length(comp_lengths))),length(years))
 length_comp_length <- (rep(comp_lengths,length(ages)*length(years)))
@@ -319,11 +320,11 @@ for(i in seq_along(length_comp_year)){
   length_comp_abund[i] <- recruitment(year,age)*
                           length_comp_no_mort_abund_per_rec[i]*(
                             
-                          (1-length_comp_prop_upper[i])*catch_abun[year==length_comp_year[i] &
+                          (1-length_comp_prop_upper[i])*abundance[year==length_comp_year[i] &
                                      age==length_comp_age[i] &
                                      len==length_comp_lower_interp[i]]
                           +
-                          length_comp_prop_upper[i]*catch_abun[year==length_comp_year[i] &
+                          length_comp_prop_upper[i]*abundance[year==length_comp_year[i] &
                                        age==length_comp_age[i] &
                                        len==length_comp_upper_interp[i]]
                           )
