@@ -15,9 +15,6 @@ ss3$ctl$GrowthModel
 
 MGpar <- ss3$ctl$MG_parms
 
-names(input)
-input$years
-
 # stock info ----
 stock_info <- "opakapaka"
 years <- ss3$dat$styr:ss3$dat$endyr
@@ -40,14 +37,14 @@ ggsave('data/opaka/maturity.png')
 # length-at-age -----
 len_amin <- MGpar$INIT[rownames(MGpar)=="L_at_Amin_Fem_GP_1"]
 len_amax <- MGpar$INIT[rownames(MGpar)=="L_at_Amax_Fem_GP_1"]
-kappa <- MGpar$INIT[rownames(MGpar)=="VonBert_K_Fem_GP_1"]
-cv_amin <- MGpar$INIT[rownames(MGpar)=="CV_young_Fem_GP_1"]
-cv_amax <- MGpar$INIT[rownames(MGpar)=="CV_old_Fem_GP_1"]
+schnute_kappa <- MGpar$INIT[rownames(MGpar)=="VonBert_K_Fem_GP_1"]
+cv <- MGpar$INIT[rownames(MGpar)=="CV_young_Fem_GP_1"]
+# cv_amax <- MGpar$INIT[rownames(MGpar)=="CV_old_Fem_GP_1"]
 amin <- ss3$ctl$Growth_Age_for_L1
 amax <- ss3$ctl$Growth_Age_for_L2
 laa <- data.frame(age = ages,
-                  laa = len_amin + (len_amax - len_amin) * (1 - exp(-kappa * (ages - amin))) / 
-                    (1 - exp(-kappa * (amax - amin))))
+                  laa = len_amin + (len_amax - len_amin) * (1 - exp(-schnute_kappa * (ages - amin))) / 
+                    (1 - exp(-schnute_kappa * (amax - amin))))
 ggplot(laa, aes(age, laa)) + 
   geom_point() + geom_line()
 ggsave('data/opaka/lengthatage.png')
@@ -61,15 +58,47 @@ ggplot(lw, aes(length_cm, weight_kg)) +
   geom_point() + geom_line()
 ggsave('data/opaka/lengthweight.png')
 
-# obs_df -----
 
-obs_type nll_type fit_data fleet year age len       obs obserror
-1        0        0        1     1 1977  NA  NA  9.987967     0.05
-2        0        0        1     1 1978  NA  NA 10.096131     0.05
-3        0        0        1     1 1979  NA  NA 10.054662     0.05
-4        0        0        1     1 1980  NA  NA  9.927595     0.05
-5        0        0        1     1 1981  NA  NA  9.887765     0.05
-6        0        0        1     1 1982  NA  NA  9.897168     0.05
+AtoL <- function(ages, len_amin, len_amax, schnute_kappa, amin, amax){
+  
+  laa = len_amin + (len_amax - len_amin) * (1 - exp(-schnute_kappa * (ages - amin))) / 
+    (1 - exp(-schnute_kappa * (amax - amin)))
+  
+}
+
+# amax <- 43
+# Linf <- 67.5
+# schnute_kappa <- 0.242
+# a0 <- -.384677
+# amin <- 6
+# cv <- cv_amax
+# ages <- 0:amax
+# len_bins <- 0:ceiling((1+3*cv)*len_amax)
+
+mean_length_age <- AtoL(ages, len_amin, len_amax, schnute_kappa, amin, amax)
+
+sizeage <- matrix(NA, nrow=length(lens), ncol=length(ages))
+
+for(i in seq_along(ages)){
+  
+  #Calculate mean length at age to spread lengths around
+  mean_length <- AtoL(ages[i], len_amin, len_amax, schnute_kappa, amin, amax)
+  
+  #Calculate the cumulative proportion shorter than each composition length
+  temp_len_probs <- pnorm(q=lens, mean=mean_length, sd=mean_length*cv)
+  
+  #Reset the first length proportion to zero so the first bin includes all
+  #density smaller than that bin
+  temp_len_probs[1] <- 0
+  
+  #subtract the offset length probabilities to calculate the proportion in each
+  #bin. For each length bin the proportion is how many fish are larger than this
+  #length but shorter than the next bin length.
+  temp_len_probs <- c(temp_len_probs[-1],1)-temp_len_probs
+  sizeage[,i] <- temp_len_probs
+}
+image(t(sizeage))
+colSums(sizeage) # should sum to 1 within each age class
 
 
 # catches ----
