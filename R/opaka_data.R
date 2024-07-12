@@ -100,6 +100,11 @@ for(i in seq_along(ages)){
 image(t(sizeage))
 colSums(sizeage) # should sum to 1 within each age class
 
+# numbers-at-age vector -> numbers-at-length vector (with sizeage transition matrix)
+# numbers-at-length vector -> mature numbers-at-length vector (by multiplying by maturity at length vector)
+# mature numbers-at-length vector -> mature numbers-at-weight (by multiplying by
+# weight at length vector, or fecundity relationship if fecundity not
+# proportional to weight)
 
 # catches ----
 
