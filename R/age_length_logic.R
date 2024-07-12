@@ -29,8 +29,8 @@ rec_props <- rec_props/sum(rec_props)
 ages <- comp_ages
 n_ages <- length(ages)
 #Function to get expected length at age from growth params
-AtoL <- function(a_f,Linf_f,K_f){
-  L <- Linf_f*(1-exp(-K_f*a_f))+0.001
+AtoL <- function(a_f,Linf_f,K_f,a_0){
+  L <- Linf_f*(1-exp(-K_f*(a_f-a_0)))+0.001
 }
 
 #Function to get expected weight at length from growth params
@@ -74,7 +74,8 @@ age <- rep(ages_x_lengths,n_years)
 #assuming a normal distribution.
 lengths_x_ages <- AtoL(ages_x_lengths,
                        rep(Linf,length(ages_x_lengths)),
-                       rep(K,length(ages_x_lengths))
+                       rep(K,length(ages_x_lengths)),
+                       rep(a0,length(ages_x_lengths))
                        )*rep(length_props,length(ages))
 
 len <- rep(lengths_x_ages,n_years)
@@ -263,49 +264,84 @@ for(i in seq_along(transition_proportion))
 #param pop_val_id #is a vector of values identifying the row id of model estimates
 #                  to include in the interpolation
 
-pop_val_id <- matrix
-for(i in comp_lengths){
-  
-}
+comp_lengths
+ages
 
-interp_length_comp <- function(comp_length,pop_val_id){
-  relative_abundance <- 0
-  for(i in unique(age[pop_val_id])){
-    temp_id <- pop_val_id[which(age[pop_val_id])==i]
-    sub_len <- len[temp_id]
-    sub_abun <- abundance[temp_id]
-    temp_abun <- sub_abun[1]+(comp_length-sub_len[1])*(sub_abun[2]-sub_abun[1])/(sub_len[2]-sub_len[1])
-    relative_abundance <- relative_abundance + temp_abun
-  }
-  return(relative_abundance)
-}
+#Need to add fleets to this. Should set up so that there can be fleet specific
+#comp bins. Just start with single population comps for now though.
 
-#TODO: Still need to write up logic for interpolating between abundance values
-#to calculate length comps.
-#
-for(i in seq_along(fleets)){
+#First set up vectors to store indexing values of year, age, composition length,
+#the model length for lower interpolation bound, model length for upper interpolation
+#bound, and the abundance for the composition component.
+length_comp_year <- sort(rep(years,(length(ages)*length(comp_lengths))))
+length_comp_age <- rep(sort(rep(ages,length(comp_lengths))),length(years))
+length_comp_length <- (rep(comp_lengths,length(ages)*length(years)))
+length_comp_lower_interp <- rep(NA,length(length_comp_length))
+length_comp_upper_interp <- rep(NA,length(length_comp_length))
+length_comp_abund <- rep(NA,length(length_comp_length))
+
+#Setup temporary storage vectors to calculate interpolation bounds and abundance
+temp_abun_per_rec<-NULL
+temp_comp_lower_interp<-rep(NA,length(comp_lengths))
+temp_comp_upper_interp<-rep(NA,length(comp_lengths))
+comp_lower_interp <- NULL
+comp_upper_interp <- NULL
+
+#Sequence along all the model ages to calculate the mean length at that age
+#and a normal distribution of lengths around the mean as well as the closest
+#model lengths at age to identify interpolation bounds.
+for(i in seq_along(ages)){
   
-  for(j in seq_along(years)){
+  mean_length <- AtoL(ages[i],Linf,K,a0)
+  
+  temp_len_probs<-pnorm(q=comp_lengths,mean=mean_length,sd=mean_length*cv)
+  temp_len_probs[1]<-0
+  temp_len_probs<- c(temp_len_probs[-1],1)-temp_len_probs
+  
+  temp_abun_per_rec <- c(temp_abun_per_rec,temp_len_probs)
+  
+  pop_lengths <- mean_length*length_props
+  
+  temp_comp_lower_interp[comp_lengths<pop_lengths[1]] <- 0
+  temp_comp_upper_interp[comp_lengths<pop_lengths[1]] <- 1
+  for(j in seq_along(pop_lengths)[-1]){
+    temp_comp_lower_interp[comp_lengths<pop_lengths[j] &
+                             comp_lengths>=pop_lengths[j-1] ] <- j-1
     
-    for(k in seq_along(ages)){
-      
-      for(j in seq_along(comp_lengths)){
-        
-        temp_proportion <- (comp_lengths[j] - model_L_lower[j])/(model_L_upper[j] - model_L_lower[j])
-        
-        pred_comp[j] <- temp_proportion
-      }
-    } 
+    temp_comp_upper_interp[comp_lengths<pop_lengths[j] &
+                             comp_lengths>=pop_lengths[j-1] ] <- j
   }
+  temp_comp_lower_interp[comp_lengths>=pop_lengths[length(pop_lengths)]] <- length(pop_lengths)
+  temp_comp_upper_interp[comp_lengths>=pop_lengths[length(pop_lengths)]] <- length(pop_lengths)+1
+
+  comp_lower_interp <- c(comp_lower_interp,temp_comp_lower_interp)
+  comp_upper_interp <- c(comp_upper_interp,temp_comp_upper_interp)
+}
+#replicate abundance and interpolation values across years 
+length_comp_no_mort_abund_per_rec <- rep(temp_abun_per_rec,length(years))
+length_comp_lower_interp <- rep(comp_lower_interp,length(years))
+length_comp_upper_interp <- rep(comp_upper_interp,length(years))
+length_comp_prop_upper <- (length_comp_length-length_comp_lower_interp)/
+                          (length_comp_upper_interp-length_comp_lower_interp)
+
+#Loop over all length components to calculate abundance
+for(i in seq_along(length_comp_year)){
+  length_comp_abund[i] <- recruitment(year,age)*
+                          length_comp_no_mort_abund_per_rec[i]*(
+                            
+                          (1-length_comp_prop_upper[i])*abundance[year==length_comp_year[i] &
+                                     age==length_comp_age[i] &
+                                     len==length_comp_lower_interp[i]]
+                          +
+                          length_comp_prop_upper[i]*abundance[year==length_comp_year[i] &
+                                       age==length_comp_age[i] &
+                                       len==length_comp_upper_interp[i]]
+                          )
 }
 
-for(i in seq_along(pred_obs)){
-  
-  
-  
-}
+#Add code to sum length components across ages 
 
-#
-#
+
+
 
 
