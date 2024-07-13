@@ -3,11 +3,9 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(ggthemes)
-compiler::enableJIT(0)
+# compiler::enableJIT(0)
 
-load("data/am2022.RData")
-load("data/sizeage_matrix.RData")
-input$sizeage <- sizeage; rm(sizeage)
+load(file = "data/opaka/opaka.Rdata")
 source("R/helper.R")
 source("R/obj_fn.R")
 source("R/likelihood_functions.R")
@@ -20,8 +18,9 @@ head(input$obsdf, 5) # long format with all observations
 # obs      # transformed appropriately for nll_type (becomes keep vec)
 # obserror # if nll_type obs error is an input (note this is Neff for dmultinom)
 
-#Remove length comps for now till we implement them
-input$obsdf <- input$obsdf[input$obsdf$obs_type!=3,]
+# Remove fit_data = 0
+input$obsdf <- input$obsdf[input$obsdf$fit_data==1,]
+length(unique(input$obsdf$fleet))
 
 # data list ----
 dat <- list()
@@ -46,12 +45,20 @@ dat$logN_mode <- 0 # 0 = deterministic SCAA, 1 = sigR estimated, logR estimated 
 # prediction data frame
 dat$aux <- get_pred(dat$aux, input)
 
+# opaka doesn't have fishery age or length comps. add some blank length comps to
+# the prediction df so the existing code runs them manually...
+dat$aux <- dplyr::bind_rows(dat$aux,
+                            tidyr::expand_grid(id = unique(dat$aux$id)+1, obs_type = 3, 
+                                               nll_type = 2, fleet = 1, year = input$years,
+                                               obs = NA, obserror = NA, age = NA, 
+                                               len = input$lens, likelihood_index = NA)) %>% 
+  dplyr::arrange(id, obs_type, fleet, year, len)
+
 # parameter ----
 par <- list()
 par$logsigR <- log(input$sigr)
 par$logsigN <- if(dat$logN_mode==2){log(0.5)}else{numeric(0)}
-par$logQ <- 0
-# is M a constant in FIMS or by year/age?
+par$logQ <- log(input$q)
 par$logM <- matrix(log(input$natmort), nrow=length(dat$year), ncol=length(dat$age))
 par$rickerpar <- if(dat$srmode==1){c(1,1)}else{numeric(0)}
 par$bhpar <- if(dat$srmode==2){c(1,1)}else{numeric(0)}
@@ -66,12 +73,11 @@ calc_ssb <- function(Naa, Faa, M, waa, mature, spawnTimes){
 }
 
 # model ----
-   
 
 fill_vals <- function(x,vals){rep(as.factor(vals), length(x))}
 map <- list()
 map$logsigR <- if(dat$logN_mode==0){fill_vals(par$logsigR, NA)}else{factor(1)}
-# map$logQ <- fill_vals(par$logQ, NA)
+map$logQ <- fill_vals(par$logQ, NA)
 map$logM <- fill_vals(par$logM, NA)
 map$logfshslx <- fill_vals(par$logfshslx, NA)
 map$logsrvslx <- fill_vals(par$logsrvslx, NA)
@@ -97,31 +103,35 @@ sdr <- sdreport(obj)
 sdr
 plr <- as.list(sdr,report=TRUE, "Est")
 plrsd <- as.list(sdr,report=TRUE, "Std")
-load('data/orig_am2022.Rdata')
 
-Rec <- as.data.frame(arep$R)
-names(Rec) <- c('year', 'R', 'Rec_sd', 'Rec_lci', 'Rec_uci')
-Rec <- Rec %>%  mutate(version = 'amak') %>% 
-  bind_rows(data.frame(year = dat$year,
-               R = exp(plr$predlogR)/1e6,
-               Rec_uci = exp(plr$predlogR+2*plrsd$predlogR),
-               Rec_lci = exp(plr$predlogR-2*plrsd$predlogR),
-               version = 'babyFIMS'))
-#View(Rec)
-ggplot(Rec %>% filter(year >= 1978), aes(year, (R), col = version)) +
-  geom_point() +
-  geom_line() + ylim(0,NA) + ggthemes::theme_few()
+## PLACEHOLDER: read in predicted SSB/recruitment/whatever and compare with babyFIMS
 
-ssb <- as.data.frame(arep$SSB)
-names(ssb) <- c('year', 'ssb', 'ssb_sd', 'ssb_lci', 'ssb_uci')
-ssb <- ssb %>% 
-  mutate(version = 'amak') %>% 
-  bind_rows(data.frame(year = dat$year,
-               ssb = exp(plr$logssb),
-               ssb_uci = exp(plr$logssb+2*plrsd$logssb),
-               ssb_lci = exp(plr$logssb-2*plrsd$logssb),
-               version = 'babyFIMS'))
-
-ggplot(ssb %>% filter(year >= 1978), aes(year, (ssb), col = version)) +
-  geom_point() +
-  geom_line() + ylim(0,NA) + ggthemes::theme_few()
+# load('data/orig_am2022.Rdata')
+# 
+# Rec <- as.data.frame(arep$R)
+# names(Rec) <- c('year', 'R', 'Rec_sd', 'Rec_lci', 'Rec_uci')
+# Rec <- Rec %>%  mutate(version = 'amak') %>% 
+#   bind_rows(data.frame(year = dat$year,
+#                        R = exp(plr$predlogR)/1e6,
+#                        Rec_uci = exp(plr$predlogR+2*plrsd$predlogR),
+#                        Rec_lci = exp(plr$predlogR-2*plrsd$predlogR),
+#                        version = 'babyFIMS'))
+# #View(Rec)
+# ggplot(Rec %>% filter(year >= 1978), aes(year, (R), col = version)) +
+#   geom_point() +
+#   geom_line() + ylim(0,NA) + ggthemes::theme_few()
+# 
+# 
+# ssb <- as.data.frame(arep$SSB)
+# names(ssb) <- c('year', 'ssb', 'ssb_sd', 'ssb_lci', 'ssb_uci')
+# ssb <- ssb %>% 
+#   mutate(version = 'amak') %>% 
+#   bind_rows(data.frame(year = dat$year,
+#                        ssb = exp(plr$logssb),
+#                        ssb_uci = exp(plr$logssb+2*plrsd$logssb),
+#                        ssb_lci = exp(plr$logssb-2*plrsd$logssb),
+#                        version = 'babyFIMS'))
+# 
+# ggplot(ssb %>% filter(year >= 1978), aes(year, (ssb), col = version)) +
+#   geom_point() +
+#   geom_line() + ylim(0,NA) + ggthemes::theme_few()

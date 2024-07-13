@@ -135,7 +135,7 @@ obj_fn <- function(par) { # note dat isn't an argument in the fxn
       predcatchatlength2[i,j] <- sum(sizeage[,j]*tmp6[i,])
     }
   }
-  
+  # browser()
   # combine and vectorize
   tmp7 <- rbind(predcatchatlength,predcatchatlength2)
   out2 <- tmp7[1,]
